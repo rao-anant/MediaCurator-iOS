@@ -1,0 +1,213 @@
+# MediaCurator iOS — Porting Progress
+
+Living handoff doc for the Android → iOS port. Read this first when resuming.
+Last updated: 2026-06-25.
+
+---
+
+## Where things stand
+
+The iOS app is **no longer a placeholder** — the first vertical slice (the Gallery
+end-to-end) has been written and **compiles cleanly** for the iOS Simulator.
+
+Xcode project lives at:
+```
+MediaCurator-iOS/MediaCurator/          ← Xcode project root
+├── MediaCurator.xcodeproj
+├── MediaCurator/                        ← source root (all our Swift files)
+├── MediaCuratorTests/
+└── MediaCuratorUITests/
+```
+
+Build command that works (simulator, no signing needed):
+```bash
+cd MediaCurator-iOS/MediaCurator
+xcodebuild -scheme MediaCurator \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -configuration Debug build
+```
+Current status: **BUILD SUCCEEDED.**
+
+---
+
+## Target & architecture decisions
+
+- **iOS 16 minimum** (`IPHONEOS_DEPLOYMENT_TARGET = 16.0`). Chosen for broad install
+  base; nothing we need requires iOS 17. Uses `ObservableObject`/`@StateObject`, not
+  the iOS 17 `@Observable` macro.
+- **Idiomatic SwiftUI throughout.** No UIKit yet. `UIViewRepresentable` reserved for
+  isolated cases (e.g. document picker) if needed later.
+- **MVVM + shared repository**, mirroring Android:
+  `View → ViewModel (ObservableObject) → MediaRepository → PHPhotoLibrary / FileManager`
+- **Bundle ID:** `com.anant.MediaCurator` (capital M — intentional, idiomatic on iOS;
+  Android side is lowercase `com.anant.mediacurator`. They are separate apps.)
+
+---
+
+## What's been built (file by file)
+
+```
+Models/
+  MediaType.swift        enum image/video/audio/pdf
+  SortMode.swift         enum, rawValues match Android ("DATE_NEWEST", etc.)
+  MediaItem.swift        struct; id = PHAsset.localIdentifier (replaces MediaStore id+uri)
+  MonthGroup.swift       year/month/items; key "YYYY-MM"
+  GalleryItem.swift      enum mirroring Android's sealed class (yearHeader/header/
+                         subHeader/media/footer) + structuralVersion
+  DuplicateGroup.swift   MD5 group with keepIndex / reclaimableBytes
+  MediaStats.swift       per-type visible/hidden counts + bytes
+
+Persistence/
+  PreferencesManager.swift   UserDefaults wrapper; keys identical to Android side
+  DeletionStatsStore.swift   cumulative deleted count + bytes freed
+
+Repository/
+  MediaRepository.swift   PHAsset fetch (image+video), dedupe by name+size,
+                          processAndGroupMedia() → (visible, done) month groups
+  MediaCache.swift        actor singleton, first-caller-pays, invalidate()
+  TrashManager.swift      PHAssetChangeRequest.deleteAssets → Recently Deleted
+
+Utilities/
+  Formatters.swift        bytes(), countShort(), monthLabel() — port of GalleryAdapter statics
+  DebugLog.swift          os.log wrapper
+
+ViewModels/
+  GalleryViewModel.swift  @MainActor; full sort/filter/expand/delete/undo logic,
+                          builds GalleryItem tree, PHPhotoLibraryChangeObserver bridge
+  HomeViewModel.swift     home hero state computation (curation %, resume month)
+
+Views/
+  Home/HomeView.swift             hero card + nav cards + NavigationStack
+  Gallery/GalleryView.swift       tree List, sort/filter toolbar, permission gating
+  Gallery/MonthHeaderView.swift   YearHeaderRow / MonthHeaderRow / SubHeaderRow
+  Gallery/MediaThumbnailView.swift  async PHImageManager thumbnail loading
+  Viewer/MediaViewerView.swift    full-screen paging TabView + delete + undo toast
+  Viewer/PhotoZoomView.swift      pinch-zoom + double-tap (replaces PhotoView lib)
+
+MediaCuratorApp.swift   @main → HomeView()   (ContentView.swift deleted)
+```
+
+Stubbed (show "coming soon"): Duplicates, Hidden, Trash, Settings screens.
+
+---
+
+## Android → iOS API mapping (reference)
+
+| Android | iOS |
+|---|---|
+| MediaStore (images/video/audio) | Photos.framework (PHAsset, PHFetchResult) |
+| MediaStore PDFs + MANAGE_EXTERNAL_STORAGE | **No equivalent** — see PDF gap below |
+| PdfBox-Android | PDFKit (built-in) — not yet implemented |
+| Glide | PHImageManager.requestImage |
+| PhotoView | SwiftUI MagnificationGesture (PhotoZoomView) |
+| Gson | Codable |
+| OsTrashManager/AppTrashManager | PHAssetChangeRequest (single path; Recently Deleted) |
+| ContentObserver | PHPhotoLibraryChangeObserver |
+| SharedPreferences | UserDefaults |
+
+Permissions are now in build settings (project uses GENERATE_INFOPLIST_FILE, no
+physical Info.plist):
+- `INFOPLIST_KEY_NSPhotoLibraryUsageDescription`
+- `INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription`
+
+---
+
+## Known gaps / divergences from Android
+
+1. **PDF discovery.** Android scans the whole filesystem for PDFs via
+   MANAGE_EXTERNAL_STORAGE. iOS forbids this. Plan: user-imports PDF folders via
+   UIDocumentPickerViewController, OR defer PDFs to a later version. **Decision pending.**
+2. **Trash restore.** iOS has no public API to restore from Recently Deleted —
+   `TrashManager.restore()` is a no-op stub; user must restore in Photos.app.
+   Need to surface a message in the Trash UI.
+3. **Audio scope** is narrower on iOS (voice memos via PHAsset; music needs MusicKit).
+4. **Duplicates / PDF BM25 search / search engine** — not ported yet.
+
+---
+
+## Environment quirks (MacInCloud managed server)
+
+- **No Accessibility / Screen Recording permission** (managed tier blocks it; the
+  dedicated tier upsell was declined). Means: no GUI automation of Xcode. We work
+  entirely via filesystem + `xcodebuild` + `simctl`. This is fine — no GUI needed.
+- **Simulator-only.** No code-signing identity installed
+  (`security find-identity -v -p codesigning` → 0 identities). Real-device / App Store
+  builds will need a cert imported later.
+- **Apple Dev cert CSR generated** but not yet completed:
+  `~/Desktop/MediaCurator_dev.certSigningRequest` (upload to developer.apple.com) and
+  `~/Desktop/MediaCurator_dev.key` (private key — keep safe). User to back up the .key.
+- **Xcode 26.3**, iOS 26.3 simulators available (iPhone 17 Pro, etc.).
+- Project uses **Xcode 16+ synchronized folder groups**
+  (`PBXFileSystemSynchronizedRootGroup`) — files added on disk are auto-included in the
+  project. **No manual "Add Files to Xcode" step needed.** Do NOT add xcodegen.
+
+---
+
+## ✅ Milestone: first slice verified on simulator (2026-06-25)
+
+The Gallery vertical slice is **running and verified** on the iPhone 17 simulator with
+real data. Confirmed working: photo-library permission flow, fetch, year/month grouping,
+WhatsApp sub-group split, thumbnails, per-group counts/sizes, and Home curation stats
+("90 items · 20.0 MB · 0 reviewed").
+
+### Test data
+- `~/Desktop/test-photos/` — 84 images (EXIF dates spread 2021-2024, 14 WhatsApp-named,
+  14 screenshots) + 2 sample PDFs. Regenerate via `~/Desktop/make_testdata.py`
+  (uses the venv at `~/Desktop/.testdata-venv`, which has `piexif`).
+- Load into sim: `xcrun simctl addmedia "iPhone 17" ~/Desktop/test-photos/*.jpg`
+- NB: the simulator ships with a few built-in sample photos dated ~2009 — that's why the
+  oldest month shows "October 2009". Harmless.
+
+### Simulator gotchas learned (important for next session)
+- **Run the GUI** with `open -a Simulator` — `simctl boot` alone is headless (no window).
+- **Photos auth in sim:** `simctl privacy grant photos` does NOT make
+  `authorizationStatus(.readWrite)` return authorized on iOS 26, and pre-writing TCC.db
+  doesn't suppress the prompt either. The app MUST call `requestAuthorization` (now done
+  in `HomeViewModel.load()`), and a human taps "Allow Full Access" once in the sim window.
+  After that it persists. (We can't tap programmatically — Accessibility is blocked here.)
+- The user CAN see/interact with the sim via the MacInCloud remote desktop.
+- Capture screenshots headlessly: `xcrun simctl io "iPhone 17" screenshot out.png`.
+
+### Fix made during verification
+- `HomeViewModel.load()` now requests photo authorization up front (mirrors Android's
+  Home permission gate). Previously only GalleryView requested it, so Home silently
+  showed "No media."
+- `MediaRepository.mediaItem(from:)` no longer drops an asset when its PHAssetResource
+  lookup is empty (fell back to identifier-derived name/size).
+
+## Viewer + delete/undo (built 2026-06-25)
+
+Full-screen pager (`MediaViewerView`) now takes the live `GalleryViewModel` (not a static
+array) and pages through `flatMediaItems`. Delete uses a **deferred-delete + undo** flow
+owned by the VM:
+- `requestDelete` hides items immediately (`pendingDeleteIDs`) and opens a 6 s undo window.
+- The actual `PHAssetChangeRequest.deleteAssets` is committed only when the window expires
+  (`commitPendingDeletion`). `undoDelete` cancels the commit and unhides.
+- **Why deferred:** once committed to iOS "Recently Deleted," no app can restore it
+  programmatically — the undo window is the only reversal point. This is a hard platform
+  difference from Android (which owned its own trash).
+- Undo toast shows in BOTH the viewer and the gallery (survives the viewer dismissing,
+  e.g. when the last visible item is deleted).
+- Also fixed: `flatMediaItems` now includes ALL visible items regardless of tree
+  expansion (was only expanded sub-groups), so the viewer can page the whole library.
+- On undo, the viewer jumps back to the restored photo (`returnToID`) — without this it
+  showed the neighbor it had advanced to, making undo *look* like a no-op.
+
+**Status: verified working on simulator (delete → undo restores the photo).** Undo window
+is 6 s; tested via the user tapping in the sim (we can't tap programmatically).
+
+### Test data backup & repopulation
+- Pristine backup: `~/Desktop/test-photos-backup/` and `~/Desktop/test-photos-backup.tgz`.
+- Refill the sim after deletions: `~/Desktop/repopulate-gallery.sh` (`--wipe` to reset the
+  sim's photo library first). The app only deletes from the sim library, never the backup.
+
+**Open decision (deferred by user):** how the Trash screen should work given iOS can't
+restore from Recently Deleted — options are (a) deep-link to Photos' Recently Deleted, or
+(b) app-managed hidden album for true in-app restore. Revisit when building Trash.
+
+## Next steps (in order)
+
+1. Wire up **mark-month-done** round-trip and confirm curation % updates on Home.
+2. Then pick the next slice: Duplicates (MD5 hashing) or Settings, and resolve the
+   **PDF discovery decision**.
+```
