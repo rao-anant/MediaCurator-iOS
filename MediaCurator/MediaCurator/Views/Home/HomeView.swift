@@ -64,7 +64,7 @@ struct HomeView: View {
             .navigationDestination(for: NavDestination.self) { dest in
                 switch dest {
                 case .gallery(let key):  GalleryView(scrollToMonthKey: key)
-                case .duplicates:        Text("Duplicates — coming soon")
+                case .duplicates:        DuplicatesView()
                 case .search:            Text("Search — coming soon")
                 case .hidden:            HiddenView()
                 case .trash:             TrashView()
