@@ -20,16 +20,14 @@ struct HomeView: View {
                         HeroCard(state: state) {
                             path.append(NavDestination.gallery(monthKey: state.resumeMonthKey))
                         }
-                        // 2x2 grid of secondary actions (matches Android).
+                        // Secondary actions. (Search is Phase 2 — it depends on the Files-app /
+                        // PDF-text integration that v1 does not include; see PORTING_NOTES §12.)
                         LazyVGrid(columns: twoColumns, spacing: 12) {
                             GridCard(title: "Free up space", subtitle: "Biggest files first", icon: "internaldrive") {
                                 path.append(NavDestination.gallery(monthKey: nil))
                             }
                             GridCard(title: "Find duplicates", subtitle: state.dupSub, icon: "doc.on.doc") {
                                 path.append(NavDestination.duplicates)
-                            }
-                            GridCard(title: "Search", subtitle: "Name, content, PDF text", icon: "magnifyingglass") {
-                                path.append(NavDestination.search)
                             }
                             GridCard(title: "Hidden months", subtitle: state.hiddenSub, icon: "eye.slash") {
                                 path.append(NavDestination.hidden)
@@ -65,7 +63,6 @@ struct HomeView: View {
                 switch dest {
                 case .gallery(let key):  GalleryView(scrollToMonthKey: key)
                 case .duplicates:        DuplicatesView()
-                case .search:            Text("Search — coming soon")
                 case .hidden:            HiddenView()
                 case .trash:             TrashView()
                 case .settings:          SettingsView()
@@ -81,7 +78,6 @@ struct HomeView: View {
 enum NavDestination: Hashable {
     case gallery(monthKey: String?)
     case duplicates
-    case search
     case hidden
     case trash
     case settings

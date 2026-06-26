@@ -228,8 +228,17 @@ the iOS port (per the user). Build every screen to match it. Status vs. spec:
   explicit Unhide button instead — revisit to match.
 - §6 DUPLICATES, §7 SEARCH, §9 STATS dialog, §10 SETTINGS, §11 HELP — all still stubs.
 
-**Open divergences (spec §12):** unified grid for PDFs/audio (live in Files app, not
-PHPhotoLibrary) is unresolved. Rename + Open-in-Photos viewer actions omitted (no iOS API).
+**§12 decision — RESOLVED (2026-06-25): Option A.** iOS v1 is scoped to the **Photos
+library (photos + videos)**. PDFs/audio (which live in the Files app, not PHPhotoLibrary)
+and **Search** (§7, primarily PDF-text) are **Phase 2** — a later Files-app integration
+(document picker + security-scoped bookmarks + a text index). Consequences in code:
+- Home "Search" card removed; `NavDestination.search` dropped.
+- Settings "PDF content search" toggle removed.
+- Help no longer mentions Search / PDFs.
+- Filter chips already hide Audio/PDF when absent, so they simply won't appear in v1.
+- Viewer Rename + Open-in-Photos remain omitted (no iOS API).
+The PreferencesManager PDF/audio flags and the `.pdf`/`.audio` MediaType cases are kept
+(harmless) so Phase 2 can light them up without a model change.
 
 ## Next steps (in order)
 

@@ -1,24 +1,17 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Settings (spec §10): PDF-search toggle, export/import hidden months, Help.
+/// Settings (spec §10): export/import hidden months, Help.
+/// (PDF content-search toggle is Phase 2 — see PORTING_NOTES §12.)
 struct SettingsView: View {
     private let prefs = PreferencesManager()
 
-    @State private var pdfContentSearch = true
     @State private var importing = false
     @State private var exportURL: URL? = nil
     @State private var toast: String? = nil
 
     var body: some View {
         Form {
-            Section("Search") {
-                Toggle("PDF content search", isOn: $pdfContentSearch)
-                    .onChange(of: pdfContentSearch) { v in prefs.setPdfContentSearchEnabled(v) }
-                Text("When on, text inside PDFs is indexed on-device for search. (PDF support is not yet available in this build.)")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-
             Section("Hidden months") {
                 Button("Export hidden months") { exportHiddenMonths() }
                 Button("Import hidden months") { importing = true }
@@ -34,7 +27,6 @@ struct SettingsView: View {
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { pdfContentSearch = prefs.isPdfContentSearchEnabled() }
         .fileImporter(isPresented: $importing,
                       allowedContentTypes: [.json],
                       allowsMultipleSelection: false) { result in

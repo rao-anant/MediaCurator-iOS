@@ -11,13 +11,11 @@ struct HelpView: View {
 
     private let features: [Feature] = [
         .init(icon: "rectangle.grid.2x2", title: "Browse, filter & sort",
-              detail: "Your library is grouped by Year and Month. Use the chips to show or hide photos, videos, audio, and PDFs, and the sort bar to reorder."),
+              detail: "Your library is grouped by Year and Month. Use the chips to show or hide photos and videos, and the sort bar to reorder."),
         .init(icon: "eye.slash", title: "Hide a month",
               detail: "When you've reviewed a month, hide it from the app to track your progress. It stays in your iPhone's Photos — nothing is deleted."),
         .init(icon: "doc.on.doc", title: "Find duplicates",
               detail: "Detects exact-duplicate photos and videos by content so you can delete extra copies and keep the best one."),
-        .init(icon: "magnifyingglass", title: "Search",
-              detail: "Search file names and text inside PDFs, all on-device."),
         .init(icon: "trash", title: "Safe deletion",
               detail: "Deletes are staged in the Trash. Nothing leaves your iPhone until you review and confirm the batch."),
         .init(icon: "lock.shield", title: "Private by design",
