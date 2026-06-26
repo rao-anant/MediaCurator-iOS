@@ -64,8 +64,11 @@ final class GalleryViewModel: ObservableObject {
     private var expandedYears:     Set<Int>    = []
     private var expandedMonths:    Set<String> = []
     private var expandedSubGroups: Set<String> = []
-    /// Sub-groups ever opened (persisted, grows only) — gates the "Hide Month" button.
+    /// Per-(month,sub,type) "seen" keys (persisted, grows only) — gates the "Hide Month"
+    /// button. e.g. "2024-03:cam:video".
     private var seenSubGroups:     Set<String> = []
+    /// Full type presence per "<month>:<sub>" ignoring the chip filter (recomputed each load).
+    private var monthTypePresence: [String: Set<MediaType>] = [:]
 
     private var loadTask: Task<Void, Never>? = nil
     private var photoLibraryObserver: PhotoLibraryObserver? = nil
@@ -145,6 +148,19 @@ final class GalleryViewModel: ObservableObject {
         let filtered = allMedia.filter {
             !sessionDeletedIDs.contains($0.id) && !stagedIDs.contains($0.id)
         }
+
+        // Full type presence per (month, sub-group), IGNORING the chip filter — the
+        // "Hide Month" gate needs to know every type that exists so a disabled chip can't
+        // sneak the button on. Keyed "<month>:<sub>" → set of types present.
+        var presence: [String: Set<MediaType>] = [:]
+        let cal = Calendar.current
+        for item in filtered {
+            let y = cal.component(.year, from: item.dateTaken)
+            let m = cal.component(.month, from: item.dateTaken)
+            let key = "\(PreferencesManager.monthKey(year: y, month: m)):\(item.isWhatsApp ? "wa" : "cam")"
+            presence[key, default: []].insert(item.type)
+        }
+        monthTypePresence = presence
 
         // Apply type filters
         let typeFiltered = filtered.filter { item in
@@ -273,15 +289,40 @@ final class GalleryViewModel: ObservableObject {
         if expandedSubGroups.contains(key) { expandedSubGroups.remove(key) }
         else {
             expandedSubGroups.insert(key)
-            // Record that this sub-group has been opened (grows only, persisted). Only
-            // writes on the first open of each sub-group.
-            if seenSubGroups.insert(key).inserted {
-                prefs.saveSeenSubGroups(seenSubGroups)
+            // Mark as "seen" per currently-enabled type: a type counts as reviewed only when
+            // the sub-group is opened while that type's filter chip is on. Keys are
+            // "<month>:<sub>:<type>", e.g. "2024-03:cam:video". Persisted, grows only.
+            var changed = false
+            for type in enabledTypes where seenSubGroups.insert("\(key):\(type.rawValue)").inserted {
+                changed = true
             }
+            if changed { prefs.saveSeenSubGroups(seenSubGroups) }
         }
         prefs.saveExpandedSubGroups(expandedSubGroups)
         structuralVersion += 1
         loadMedia(forceRefresh: false)
+    }
+
+    /// True when every (sub-group, type) that exists in the month has been reviewed — each
+    /// type seen with its chip on, in whichever sub-group(s) contain it. Gates "Hide Month".
+    private func monthFullyReviewed(_ monthKey: String) -> Bool {
+        for sub in ["cam", "wa"] {
+            let types = monthTypePresence["\(monthKey):\(sub)"] ?? []
+            for type in types where !seenSubGroups.contains("\(monthKey):\(sub):\(type.rawValue)") {
+                return false
+            }
+        }
+        return true
+    }
+
+    /// Media types whose filter chip is currently enabled.
+    private var enabledTypes: [MediaType] {
+        var t: [MediaType] = []
+        if includePhoto { t.append(.image) }
+        if includeVideo { t.append(.video) }
+        if includeAudio { t.append(.audio) }
+        if includePdf   { t.append(.pdf) }
+        return t
     }
 
     // MARK: - Type filters
@@ -428,8 +469,6 @@ final class GalleryViewModel: ObservableObject {
                 let waItems  = mg.items.filter { $0.isWhatsApp }.sorted(by: byDate)
                 let camItems = mg.items.filter { !$0.isWhatsApp }.sorted(by: byDate)
 
-                let camKey = "\(mg.key):cam"
-                let waKey  = "\(mg.key):wa"
                 for (subLabel, subKey, subItems) in [
                     ("Camera & Others", "\(mg.key):cam", camItems),
                     ("WhatsApp",        "\(mg.key):wa",  waItems)
@@ -463,12 +502,11 @@ final class GalleryViewModel: ObservableObject {
                         }
                     }
                 }
-                // Only offer "Hide Month" once EVERY sub-group present has been opened at
-                // least once (ever — persisted). An empty sub-group counts as already seen,
-                // so a month with only Camera shows the button after Camera is reviewed.
-                let camSeen = camItems.isEmpty || seenSubGroups.contains(camKey)
-                let waSeen  = waItems.isEmpty  || seenSubGroups.contains(waKey)
-                if camSeen && waSeen {
+                // Offer "Hide Month" only once EVERY (sub-group, type) that actually exists in
+                // the month has been reviewed — i.e. the sub-group was opened while that type's
+                // chip was on. Uses full type presence (chip-independent), so a disabled filter
+                // can't reveal the button early. Persisted, so reviewing can span sessions.
+                if monthFullyReviewed(mg.key) {
                     items.append(.footer(.init(monthKey: mg.key, structuralVersion: sv)))
                 }
             }
