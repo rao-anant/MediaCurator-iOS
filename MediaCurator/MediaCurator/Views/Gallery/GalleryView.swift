@@ -15,7 +15,10 @@ struct GalleryView: View {
         Group {
             switch vm.authorizationStatus {
             case .authorized, .limited:
-                galleryContent
+                VStack(spacing: 0) {
+                    sortBar
+                    galleryContent
+                }
             case .denied, .restricted:
                 permissionDeniedView
             case .notDetermined:
@@ -26,19 +29,13 @@ struct GalleryView: View {
         }
         .overlay(alignment: .bottom) {
             if let undo = vm.pendingUndo {
-                HStack(spacing: 16) {
-                    Text(undo.message).font(.subheadline)
-                    Button("Undo") { vm.undoDelete() }
-                        .font(.subheadline.bold())
-                }
-                .padding(.horizontal, 20).padding(.vertical, 12)
-                .background(.regularMaterial, in: Capsule())
-                .shadow(radius: 8, y: 2)
-                .padding(.bottom, 24)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                toast(message: undo.message) { vm.undoDelete() }
+            } else if let done = vm.doneToast {
+                toast(message: "\(done.label) marked done") { vm.undoMarkDone() }
             }
         }
         .animation(.spring(duration: 0.3), value: vm.pendingUndo)
+        .animation(.spring(duration: 0.3), value: vm.doneToast)
         .navigationTitle("Gallery")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { galleryToolbar }
@@ -54,27 +51,122 @@ struct GalleryView: View {
         }
     }
 
+    // MARK: - Sort bar
+
+    /// Always-visible sort indicator at the top of the gallery — shows the current order
+    /// and lets the user change it (mirrors Android's gallery sort header).
+    private var sortBar: some View {
+        VStack(spacing: 0) {
+            Menu {
+                ForEach(SortMode.allCases, id: \.self) { mode in
+                    Button {
+                        vm.setSortMode(mode)
+                    } label: {
+                        if vm.sortMode == mode {
+                            Label(mode.displayName, systemImage: "checkmark")
+                        } else {
+                            Text(mode.displayName)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.up.arrow.down")
+                    Text("Sorted by \(vm.sortMode.displayName)")
+                        .fontWeight(.medium)
+                    Image(systemName: "chevron.down").font(.caption2)
+                    Spacer()
+                }
+                .font(.subheadline)
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.secondarySystemBackground))
+            }
+            .buttonStyle(.plain)
+            Divider()
+        }
+    }
+
+    // MARK: - Toast
+
+    private func toast(message: String, undo: @escaping () -> Void) -> some View {
+        HStack(spacing: 16) {
+            Text(message).font(.subheadline)
+            Button("Undo", action: undo).font(.subheadline.bold())
+        }
+        .padding(.horizontal, 20).padding(.vertical, 12)
+        .background(.regularMaterial, in: Capsule())
+        .shadow(radius: 8, y: 2)
+        .padding(.bottom, 24)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
     // MARK: - Gallery content
+
+    private let gridColumns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 4)
 
     private var galleryContent: some View {
         ScrollViewReader { proxy in
-            List {
+            ScrollView {
                 if vm.isLoading && vm.galleryItems.isEmpty {
-                    HStack { Spacer(); ProgressView("Scanning library…"); Spacer() }
-                        .listRowSeparator(.hidden)
+                    ProgressView("Scanning library…").padding(.top, 40)
                 }
-                ForEach(vm.galleryItems) { galleryItem in
-                    galleryRow(for: galleryItem)
-                        .listRowInsets(EdgeInsets())
-                        .listRowSeparator(.hidden)
+                LazyVStack(spacing: 0) {
+                    ForEach(displayBlocks) { block in
+                        switch block {
+                        case .row(let item):
+                            galleryRow(for: item).id(item.id)
+                        case .grid(let cells, let blockID):
+                            LazyVGrid(columns: gridColumns, spacing: 2) {
+                                ForEach(cells, id: \.mediaItem.id) { cell in
+                                    MediaThumbnailView(cell: cell) { selectedItem = cell.mediaItem }
+                                }
+                            }
+                            .padding(.horizontal, 2)
+                            .padding(.vertical, 2)
+                            .id(blockID)
+                        }
+                    }
                 }
             }
-            .listStyle(.plain)
             .refreshable { vm.loadMedia(forceRefresh: true) }
             .onChange(of: scrollToMonthKey) { key in
-                if let key { proxy.scrollTo("month-\(key)", anchor: .top) }
+                if let key { withAnimation { proxy.scrollTo("month-\(key)", anchor: .top) } }
             }
         }
+    }
+
+    /// Headers/footers render full-width; runs of consecutive media cells are grouped so
+    /// they can be laid out in a grid instead of one-per-row.
+    private enum DisplayBlock: Identifiable {
+        case row(GalleryItem)
+        case grid([GalleryItem.MediaCell], id: String)
+        var id: String {
+            switch self {
+            case .row(let item):    return item.id
+            case .grid(_, let id):  return id
+            }
+        }
+    }
+
+    private var displayBlocks: [DisplayBlock] {
+        var blocks: [DisplayBlock] = []
+        var run: [GalleryItem.MediaCell] = []
+        func flush() {
+            guard let first = run.first else { return }
+            blocks.append(.grid(run, id: "grid-\(first.mediaItem.id)"))
+            run = []
+        }
+        for item in vm.galleryItems {
+            if case .media(let cell) = item {
+                run.append(cell)
+            } else {
+                flush()
+                blocks.append(.row(item))
+            }
+        }
+        flush()
+        return blocks
     }
 
     @ViewBuilder
@@ -82,22 +174,25 @@ struct GalleryView: View {
         switch item {
         case .yearHeader(let y):
             YearHeaderRow(header: y) { vm.toggleYearExpansion(y.year) }
-                .id(item.id)
         case .header(let h):
-            MonthHeaderRow(header: h,
-                           onTap: { vm.toggleMonthExpansion(h.monthKey) },
-                           onMarkDone: { vm.markMonthDone(key: h.monthKey) })
-                .id(item.id)
+            MonthHeaderRow(header: h, onTap: { vm.toggleMonthExpansion(h.monthKey) })
         case .subHeader(let s):
             SubHeaderRow(sub: s) { vm.toggleSubGroupExpansion(s.subKey) }
-                .id(item.id)
-        case .media(let m):
-            MediaThumbnailView(cell: m) {
-                selectedItem = m.mediaItem
+        case .footer(let f):
+            Button {
+                vm.markMonthDone(key: f.monthKey)
+            } label: {
+                Label("Hide Month from this app", systemImage: "eye.slash")
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
             }
-            .id(item.id)
-        case .footer:
-            Divider().padding(.vertical, 4).id(item.id)
+            .buttonStyle(.bordered)
+            .tint(.accentColor)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        case .media:
+            EmptyView()   // media is rendered via grid blocks, never here
         }
     }
 
@@ -125,20 +220,7 @@ struct GalleryView: View {
 
     @ToolbarContentBuilder
     private var galleryToolbar: some ToolbarContent {
-        ToolbarItem(placement: .navigationBarTrailing) {
-            Menu {
-                ForEach(SortMode.allCases, id: \.self) { mode in
-                    Button {
-                        vm.setSortMode(mode)
-                    } label: {
-                        Label(mode.displayName,
-                              systemImage: vm.sortMode == mode ? "checkmark" : "")
-                    }
-                }
-            } label: {
-                Image(systemName: "arrow.up.arrow.down")
-            }
-        }
+        // Sort lives in the always-visible sort bar; the toolbar keeps just the type filter.
         ToolbarItem(placement: .navigationBarTrailing) {
             // Type filter chips
             Menu {

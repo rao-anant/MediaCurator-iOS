@@ -205,6 +205,32 @@ is 6 s; tested via the user tapping in the sim (we can't tap programmatically).
 restore from Recently Deleted — options are (a) deep-link to Photos' Recently Deleted, or
 (b) app-managed hidden album for true in-app restore. Revisit when building Trash.
 
+## Functional spec alignment (source of truth)
+
+`../MediaCurator-android/docs/FUNCTIONAL_SPEC.md` is the **behavioral source of truth** for
+the iOS port (per the user). Build every screen to match it. Status vs. spec:
+
+**Built & aligned:**
+- HOME hub: hero (tappable card), 2×2 grid (Free up space / Find dupes / Search / Hidden),
+  Trash card dimmed when empty, library summary line. (Missing: ⓘ Stats, Help/Settings overflow.)
+- GALLERY: Year→Month→(Camera/WhatsApp)→grid tree, 4-col grid, size badges, oldest-first
+  default, top sort bar. "Hide Month" footer with the persisted "both sub-groups seen" gate (§3).
+- Hide-month Undo toast (§3). VIEWER: paging, zoom, Share, Delete (§4).
+- TRASH = spec §8 Option 2 (stage-and-review, app-managed `staged_for_deletion`, commit =
+  one batched PHAsset delete). HIDDEN: Year/Month dropdowns + unhide (§5, partial).
+
+**Not yet built (spec sections):**
+- §3 Filter chips as a "settings bar" (counts + green✓/red✕, "≥1 filter active" floor, hide
+  audio/PDF chips when none). Currently a toolbar filter menu instead.
+- §3 Selection mode (long-press multi-select → Share/Move/Delete bar). Sticky header. FABs.
+- §3/§4 Toolbar ⓘ Stats, "Restore last deleted (N)".
+- §5 HIDDEN: spec wants pick-month = unhide immediately + "keep unhidden?" guard. We use an
+  explicit Unhide button instead — revisit to match.
+- §6 DUPLICATES, §7 SEARCH, §9 STATS dialog, §10 SETTINGS, §11 HELP — all still stubs.
+
+**Open divergences (spec §12):** unified grid for PDFs/audio (live in Files app, not
+PHPhotoLibrary) is unresolved. Rename + Open-in-Photos viewer actions omitted (no iOS API).
+
 ## Next steps (in order)
 
 1. Wire up **mark-month-done** round-trip and confirm curation % updates on Home.

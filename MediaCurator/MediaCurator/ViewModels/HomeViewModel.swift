@@ -62,13 +62,21 @@ final class HomeViewModel: ObservableObject {
             let resumeKey    = monthsOldest.first { !done.contains($0) }
             let hiddenItems  = monthsOldest.filter { done.contains($0) }.reduce(0) { $0 + (byMonth[$1] ?? 0) }
 
+            // Trash = items staged for deletion (reconciled against the live library).
+            let liveIDs      = Set(media.map(\.id))
+            let staged       = prefs.getStagedForDeletion().intersection(liveIDs)
+            let trashItems   = media.filter { staged.contains($0.id) }
+            let trashBytes   = trashItems.reduce(0) { $0 + $1.size }
+
             state = buildState(
                 total: media.count,
                 size: totalSize,
                 hidden: hiddenItems,
                 totalMonths: totalMonths,
                 doneMonths: doneCount,
-                resumeKey: resumeKey
+                resumeKey: resumeKey,
+                trashCount: trashItems.count,
+                trashBytes: trashBytes
             )
         }
     }
@@ -79,7 +87,9 @@ final class HomeViewModel: ObservableObject {
         hidden: Int,
         totalMonths: Int,
         doneMonths: Int,
-        resumeKey: String?
+        resumeKey: String?,
+        trashCount: Int,
+        trashBytes: Int64
     ) -> HomeState {
         let summary = total == 0
             ? "No media found"
@@ -119,8 +129,9 @@ final class HomeViewModel: ObservableObject {
             resumeMonthKey: resumeKey,
             dupSub: "Not scanned yet",
             hiddenSub: hidden == 0 ? "Nothing hidden yet" : "\(Formatters.countShort(hidden)) hidden",
-            trashSub: "0 items",
-            trashEmpty: true
+            trashSub: trashCount == 0 ? "0 items"
+                : "\(Formatters.countShort(trashCount)) · \(Formatters.bytes(trashBytes))",
+            trashEmpty: trashCount == 0
         )
     }
 }

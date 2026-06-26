@@ -35,38 +35,32 @@ struct YearHeaderRow: View {
     }
 }
 
-/// Month header row — tap to expand/collapse the month; swipe or button to mark done.
+/// Month header row — tap the row to expand/collapse. Hiding a month is done via the
+/// "Hide Month from this app" button at the bottom of the expanded month.
 struct MonthHeaderRow: View {
     let header: GalleryItem.Header
     let onTap: () -> Void
-    let onMarkDone: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 8) {
-                Image(systemName: header.isExpanded ? "chevron.down" : "chevron.right")
-                    .foregroundStyle(.secondary)
-                    .frame(width: 16)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(header.label).font(.headline)
-                    typeCountLine
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(Formatters.countShort(header.count))
-                        .font(.subheadline).foregroundStyle(.secondary)
-                    Text(Formatters.bytes(header.totalBytes))
-                        .font(.caption).foregroundStyle(.tertiary)
-                }
-                Button(action: onMarkDone) {
-                    Image(systemName: "checkmark.circle")
-                        .foregroundColor(.accentColor)
-                }
-                .buttonStyle(.plain)
+        HStack(spacing: 8) {
+            Image(systemName: header.isExpanded ? "chevron.down" : "chevron.right")
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(header.label).font(.headline)
+                typeCountLine
             }
-            .padding(.horizontal, 16).padding(.vertical, 8)
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(Formatters.countShort(header.count))
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Text(Formatters.bytes(header.totalBytes))
+                    .font(.caption).foregroundStyle(.tertiary)
+            }
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 16).padding(.vertical, 8)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
     }
 
     private var typeCountLine: some View {

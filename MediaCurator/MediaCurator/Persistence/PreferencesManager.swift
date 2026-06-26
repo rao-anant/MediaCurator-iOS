@@ -15,6 +15,8 @@ final class PreferencesManager {
         static let expandedYears        = "expanded_years"
         static let expandedMonths       = "expanded_months"
         static let expandedSubGroups    = "expanded_subgroups"
+        static let seenSubGroups        = "seen_subgroups"
+        static let stagedForDeletion    = "staged_for_deletion"
         static let pdfContentSearch     = "pdf_content_search"
         static let photoDupDetection    = "photo_duplicate_detection"
         static let seenOnboarding       = "seen_onboarding"
@@ -59,8 +61,10 @@ final class PreferencesManager {
     }
 
     func getSortMode() -> SortMode {
+        // Default to oldest-first — curation works through the library from the oldest
+        // month forward (matches the Android default).
         guard let raw = defaults.string(forKey: Key.sortMode),
-              let mode = SortMode(rawValue: raw) else { return .sizeAbsolute }
+              let mode = SortMode(rawValue: raw) else { return .dateOldest }
         return mode
     }
 
@@ -99,6 +103,16 @@ final class PreferencesManager {
     }
     func getExpandedSubGroups() -> Set<String> {
         Set(defaults.stringArray(forKey: Key.expandedSubGroups) ?? [])
+    }
+
+    /// Sub-groups the user has opened at least once (ever). Grows only — never cleared on
+    /// collapse — so "Hide Month" appears only after every sub-group has been reviewed,
+    /// and that review survives across sessions. One entry per sub-group, e.g. "2024-03:cam".
+    func saveSeenSubGroups(_ groups: Set<String>) {
+        defaults.set(Array(groups), forKey: Key.seenSubGroups)
+    }
+    func getSeenSubGroups() -> Set<String> {
+        Set(defaults.stringArray(forKey: Key.seenSubGroups) ?? [])
     }
 
     // MARK: - Feature flags
@@ -144,6 +158,18 @@ final class PreferencesManager {
     func clearLastDeletedBatch() { defaults.removeObject(forKey: Key.lastBatch) }
 
     // MARK: - Helpers
+
+    // MARK: - Trash (staged for deletion)
+
+    /// PHAsset localIdentifiers the user has staged for deletion. The photos still live in
+    /// the Photos library (hidden in our app) until the user commits the batch. Persisted so
+    /// staging survives app restarts — nothing is ever deleted automatically.
+    func getStagedForDeletion() -> Set<String> {
+        Set(defaults.stringArray(forKey: Key.stagedForDeletion) ?? [])
+    }
+    func setStagedForDeletion(_ ids: Set<String>) {
+        defaults.set(Array(ids), forKey: Key.stagedForDeletion)
+    }
 
     /// "YYYY-MM" key, e.g. "2024-03". Static so MonthGroup can call it without an instance.
     static func monthKey(year: Int, month: Int) -> String {

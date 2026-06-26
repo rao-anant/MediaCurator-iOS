@@ -9,11 +9,12 @@ struct MediaThumbnailView: View {
     let onTap: () -> Void
 
     @State private var image: UIImage? = nil
-    private let size: CGFloat = 100
+    /// Pixel target for the thumbnail request; the view itself fills its grid cell.
+    private let requestPx: CGFloat = 220
 
     var body: some View {
         Button(action: onTap) {
-            ZStack(alignment: .bottomLeading) {
+            ZStack {
                 Group {
                     if let img = image {
                         Image(uiImage: img)
@@ -28,32 +29,41 @@ struct MediaThumbnailView: View {
                             )
                     }
                 }
-                .frame(width: size, height: size)
+                .frame(maxWidth: .infinity)
+                .aspectRatio(1, contentMode: .fill)
                 .clipped()
 
-                // Duration badge for video
+                // Duration badge for video (bottom-leading)
                 if cell.mediaItem.type == .video && cell.mediaItem.duration > 0 {
-                    Text(durationString(cell.mediaItem.duration))
-                        .font(.caption2).bold()
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 4).padding(.vertical, 2)
-                        .background(.black.opacity(0.55))
-                        .padding(3)
+                    badge(durationString(cell.mediaItem.duration), bold: true)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 }
 
-                // Date badge in SIZE_ABSOLUTE flat mode
+                // File-size badge (bottom-trailing) — always shown
+                badge(Formatters.bytes(cell.mediaItem.size))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+
+                // Date badge in flat ("largest files") mode (top-leading)
                 if let label = cell.dateLabel {
-                    Text(label)
-                        .font(.caption2)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 4).padding(.vertical, 2)
-                        .background(.black.opacity(0.55))
-                        .padding(3)
+                    badge(label)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
             }
+            .clipped()
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .task(id: cell.mediaItem.id) { await loadThumbnail() }
+    }
+
+    private func badge(_ text: String, bold: Bool = false) -> some View {
+        Text(text)
+            .font(.caption2)
+            .fontWeight(bold ? .bold : .regular)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 4).padding(.vertical, 2)
+            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 4))
+            .padding(3)
     }
 
     // MARK: - Thumbnail loading
@@ -71,7 +81,7 @@ struct MediaThumbnailView: View {
         await withCheckedContinuation { continuation in
             PHImageManager.default().requestImage(
                 for: asset,
-                targetSize: CGSize(width: size * 2, height: size * 2),
+                targetSize: CGSize(width: requestPx, height: requestPx),
                 contentMode: .aspectFill,
                 options: opts
             ) { img, _ in

@@ -85,20 +85,26 @@ struct MediaViewerView: View {
 
             Spacer()
 
-            HStack {
-                Spacer()
-                Button(role: .destructive, action: deleteCurrentItem) {
-                    Label("Delete", systemImage: "trash")
-                        .font(.subheadline).foregroundStyle(.white)
-                        .padding(.horizontal, 20).padding(.vertical, 10)
-                        .background(.red.opacity(0.85), in: Capsule())
-                }
-                Spacer()
+            HStack(spacing: 36) {
+                // Share — opens the system share sheet for the current photo.
+                actionIcon("square.and.arrow.up") { shareCurrentItem() }
+                // Delete — moves to Recently Deleted (via the deferred-delete + undo flow).
+                actionIcon("trash", tint: .red) { deleteCurrentItem() }
             }
-            .padding(.bottom, 32)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
             .background(.black.opacity(0.4))
         }
         .transition(.opacity)
+    }
+
+    private func actionIcon(_ systemName: String, tint: Color = .white, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.title2)
+                .foregroundStyle(tint)
+                .frame(width: 44, height: 44)
+        }
     }
 
     private func undoToast(_ undo: GalleryViewModel.PendingUndo) -> some View {
@@ -125,6 +131,25 @@ struct MediaViewerView: View {
         items.first { $0.id == currentID }
     }
 
+    private func shareCurrentItem() {
+        guard let item = currentItem else { return }
+        let result = PHAsset.fetchAssets(withLocalIdentifiers: [item.localIdentifier], options: nil)
+        guard let asset = result.firstObject else { return }
+
+        let opts = PHImageRequestOptions()
+        opts.isNetworkAccessAllowed = true
+        opts.deliveryMode = .highQualityFormat
+        PHImageManager.default().requestImage(
+            for: asset,
+            targetSize: PHImageManagerMaximumSize,
+            contentMode: .default,
+            options: opts
+        ) { image, _ in
+            guard let image else { return }
+            Task { @MainActor in presentShareSheet(items: [image]) }
+        }
+    }
+
     private func deleteCurrentItem() {
         guard let item = currentItem else { return }
         lastDeletedID = item.id
@@ -135,4 +160,25 @@ struct MediaViewerView: View {
         }
         vm.requestDelete([item])
     }
+}
+
+// MARK: - Share sheet bridge
+
+@MainActor
+private func presentShareSheet(items: [Any]) {
+    guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }),
+          let root = scene.keyWindow?.rootViewController
+    else { return }
+
+    // Walk to the top-most presented controller (the full-screen viewer).
+    var top = root
+    while let presented = top.presentedViewController { top = presented }
+
+    let vc = UIActivityViewController(activityItems: items, applicationActivities: nil)
+    vc.popoverPresentationController?.sourceView = top.view
+    vc.popoverPresentationController?.sourceRect = CGRect(
+        x: top.view.bounds.midX, y: top.view.bounds.maxY - 40, width: 0, height: 0)
+    top.present(vc, animated: true)
 }

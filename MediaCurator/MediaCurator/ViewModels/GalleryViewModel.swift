@@ -29,10 +29,20 @@ final class GalleryViewModel: ObservableObject {
         let count: Int
     }
 
-    /// Seconds the "Undo" toast stays up before the deletion is committed to Photos.
-    /// Once committed, the items are in the system's Recently Deleted and cannot be
-    /// restored programmatically, so this window is the only chance to undo.
-    private let undoWindowSeconds: UInt64 = 6
+    /// Non-nil briefly after a month is marked done. Drives the "marked done" undo toast.
+    @Published var doneToast: DoneToast? = nil
+
+    struct DoneToast: Equatable {
+        let monthKey: String
+        let label: String
+    }
+
+    private var doneToastTask: Task<Void, Never>? = nil
+
+    /// Seconds the "Moved to Trash" toast stays up. Purely cosmetic — the item stays staged
+    /// (and hidden) after it dismisses; nothing is committed to Photos here.
+    private let toastSeconds: UInt64 = 4
+    private var undoToastTask: Task<Void, Never>? = nil
 
     // MARK: - Private
 
@@ -44,17 +54,18 @@ final class GalleryViewModel: ObservableObject {
     /// Guards against MediaStore-equivalent lag where deleted items briefly reappear.
     private var sessionDeletedIDs: Set<String> = []
 
-    /// Items hidden from the UI but NOT yet committed to Photos — the undo window is open.
-    /// Deferring the actual PHAsset deletion is what makes undo possible (iOS has no API to
-    /// restore from Recently Deleted once committed).
-    private var pendingDeleteIDs: Set<String> = []
-    private var pendingDeleteItems: [MediaItem] = []
-    private var commitTask: Task<Void, Never>? = nil
+    /// Items staged for deletion (app-managed trash): hidden in our app but still in the
+    /// Photos library until the user commits the batch from the Trash screen. Persisted.
+    private var stagedIDs: Set<String> = []
+    /// The most recent stage action, so the toast's Undo can un-stage exactly those.
+    private var lastStagedBatch: [MediaItem] = []
 
     private var structuralVersion = 0
     private var expandedYears:     Set<Int>    = []
     private var expandedMonths:    Set<String> = []
     private var expandedSubGroups: Set<String> = []
+    /// Sub-groups ever opened (persisted, grows only) — gates the "Hide Month" button.
+    private var seenSubGroups:     Set<String> = []
 
     private var loadTask: Task<Void, Never>? = nil
     private var photoLibraryObserver: PhotoLibraryObserver? = nil
@@ -79,6 +90,8 @@ final class GalleryViewModel: ObservableObject {
         self.expandedYears     = prefs.getExpandedYears()
         self.expandedMonths    = prefs.getExpandedMonths()
         self.expandedSubGroups = prefs.getExpandedSubGroups()
+        self.seenSubGroups     = prefs.getSeenSubGroups()
+        self.stagedIDs         = prefs.getStagedForDeletion()
 
         self.lastBatchSize = prefs.getLastDeletedBatch().count
 
@@ -121,9 +134,16 @@ final class GalleryViewModel: ObservableObject {
         DebugLog.i("gallery", "load start forceRefresh=\(forceRefresh)")
         let allMedia = await MediaCache.shared.get(repo: repo, forceRefresh: forceRefresh)
 
-        // Hide both committed session-deletes and items in the open undo window.
+        // Re-read staged set from prefs (picks up restores made on the Trash screen) and
+        // reconcile it against the library — drop any staged id that no longer resolves to
+        // an asset (e.g. the user deleted it directly in the Photos app).
+        let liveIDs = Set(allMedia.map(\.id))
+        stagedIDs = prefs.getStagedForDeletion().intersection(liveIDs)
+        prefs.setStagedForDeletion(stagedIDs)
+
+        // Hide committed session-deletes and items staged for deletion.
         let filtered = allMedia.filter {
-            !sessionDeletedIDs.contains($0.id) && !pendingDeleteIDs.contains($0.id)
+            !sessionDeletedIDs.contains($0.id) && !stagedIDs.contains($0.id)
         }
 
         // Apply type filters
@@ -145,65 +165,41 @@ final class GalleryViewModel: ObservableObject {
         DebugLog.i("gallery", "load done items=\(galleryItems.count)")
     }
 
-    // MARK: - Deletion (deferred, with undo)
+    // MARK: - Deletion (stage to app-managed trash)
 
-    /// Hide [items] immediately and open an undo window. The actual Photos deletion is
-    /// committed only when the window expires (see `commitPendingDeletion`). Tapping undo
-    /// before then cancels the commit and restores the items.
+    /// Stage [items] for deletion: hide them in the app and persist the staged set. Nothing
+    /// is committed to Photos here — the user reviews and commits the batch on the Trash
+    /// screen. A short toast offers an immediate Undo (un-stage).
     func requestDelete(_ items: [MediaItem]) {
         guard !items.isEmpty else { return }
 
-        // If a previous undo window is still open, commit it now before starting a new one.
-        if !pendingDeleteItems.isEmpty {
-            commitTask?.cancel()
-            let prior = pendingDeleteItems
-            Task { await commitPendingDeletion(prior) }
-        }
+        for item in items { stagedIDs.insert(item.id) }
+        prefs.setStagedForDeletion(stagedIDs)
+        lastStagedBatch = items
 
-        for item in items { pendingDeleteIDs.insert(item.id) }
-        pendingDeleteItems = items
         pendingUndo = PendingUndo(
-            message: items.count == 1 ? "1 item deleted" : "\(items.count) items deleted",
+            message: items.count == 1 ? "Moved to Trash" : "\(items.count) moved to Trash",
             count: items.count
         )
         loadMedia(forceRefresh: false)   // re-filter from cache (cheap), hides the items
 
-        commitTask?.cancel()
-        commitTask = Task { [undoWindowSeconds] in
-            try? await Task.sleep(nanoseconds: undoWindowSeconds * 1_000_000_000)
+        // Auto-dismiss the toast; the item stays staged (and hidden) regardless.
+        undoToastTask?.cancel()
+        undoToastTask = Task { [toastSeconds] in
+            try? await Task.sleep(nanoseconds: toastSeconds * 1_000_000_000)
             guard !Task.isCancelled else { return }
-            await commitPendingDeletion(items)
-        }
-    }
-
-    /// Cancel the pending commit and restore the hidden items.
-    func undoDelete() {
-        commitTask?.cancel()
-        commitTask = nil
-        for item in pendingDeleteItems { pendingDeleteIDs.remove(item.id) }
-        pendingDeleteItems = []
-        pendingUndo = nil
-        loadMedia(forceRefresh: false)
-    }
-
-    private func commitPendingDeletion(_ items: [MediaItem]) async {
-        let result = await trashManager.trash(items)
-        // Promote from "pending" to permanently session-deleted regardless of how many the
-        // system reports trashed, so the UI never flickers them back.
-        for item in items {
-            pendingDeleteIDs.remove(item.id)
-            sessionDeletedIDs.insert(item.id)
-        }
-        if pendingDeleteItems.map(\.id) == items.map(\.id) {
-            pendingDeleteItems = []
             pendingUndo = nil
         }
-        if result.count > 0 {
-            prefs.setLastDeletedBatch(items.map { ($0.localIdentifier, $0.size) })
-            lastBatchSize = items.count
-        }
-        await MediaCache.shared.invalidate()
-        loadMedia(forceRefresh: true)
+    }
+
+    /// Un-stage the most recent batch (the toast's Undo).
+    func undoDelete() {
+        undoToastTask?.cancel()
+        for item in lastStagedBatch { stagedIDs.remove(item.id) }
+        prefs.setStagedForDeletion(stagedIDs)
+        lastStagedBatch = []
+        pendingUndo = nil
+        loadMedia(forceRefresh: false)
     }
 
     // MARK: - Done months
@@ -213,6 +209,9 @@ final class GalleryViewModel: ObservableObject {
         guard parts.count == 2, let y = Int(parts[0]), let m = Int(parts[1]) else { return }
         prefs.markMonthDone(year: y, month: m)
         structuralVersion += 1
+        // Marking done is instantly reversible (just a prefs flag), so no deferred commit —
+        // we surface an Undo toast purely as a convenience / confirmation.
+        showDoneToast(key: key)
         loadMedia(forceRefresh: false)
     }
 
@@ -222,6 +221,24 @@ final class GalleryViewModel: ObservableObject {
         prefs.unmarkMonthDone(year: y, month: m)
         structuralVersion += 1
         loadMedia(forceRefresh: false)
+    }
+
+    /// Undo the most recently marked-done month (driven by the toast).
+    func undoMarkDone() {
+        guard let toast = doneToast else { return }
+        doneToastTask?.cancel()
+        doneToast = nil
+        unmarkMonthDone(key: toast.monthKey)
+    }
+
+    private func showDoneToast(key: String) {
+        doneToastTask?.cancel()
+        doneToast = DoneToast(monthKey: key, label: Formatters.monthLabel(from: key))
+        doneToastTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.doneToast = nil
+        }
     }
 
     // MARK: - Sort
@@ -254,7 +271,14 @@ final class GalleryViewModel: ObservableObject {
 
     func toggleSubGroupExpansion(_ key: String) {
         if expandedSubGroups.contains(key) { expandedSubGroups.remove(key) }
-        else { expandedSubGroups.insert(key) }
+        else {
+            expandedSubGroups.insert(key)
+            // Record that this sub-group has been opened (grows only, persisted). Only
+            // writes on the first open of each sub-group.
+            if seenSubGroups.insert(key).inserted {
+                prefs.saveSeenSubGroups(seenSubGroups)
+            }
+        }
         prefs.saveExpandedSubGroups(expandedSubGroups)
         structuralVersion += 1
         loadMedia(forceRefresh: false)
@@ -319,13 +343,15 @@ final class GalleryViewModel: ObservableObject {
             return BuiltGallery(items: items, flat: flat)
         }
 
-        // Tree mode: year → month → (cam subgroup / wa subgroup) → items
+        // Tree mode: year → month → (cam subgroup / wa subgroup) → items.
+        // Date direction: oldest-first ascends years/months; everything else descends.
+        let ascending = (sortMode == .dateOldest)
         // Group visible months by year
         var byYear: [Int: [MonthGroup]] = [:]
         for mg in visible {
             byYear[mg.year, default: []].append(mg)
         }
-        let years = byYear.keys.sorted(by: >)
+        let years = byYear.keys.sorted(by: ascending ? (<) : (>))
 
         for year in years {
             let monthGroups = byYear[year]!
@@ -353,7 +379,7 @@ final class GalleryViewModel: ObservableObject {
 
             guard yearExpanded else { continue }
 
-            for mg in monthGroups.sorted(by: { $0.key > $1.key }) {
+            for mg in monthGroups.sorted(by: { ascending ? $0.key < $1.key : $0.key > $1.key }) {
                 let monthExpanded = expandedMonths.contains(mg.key)
 
                 items.append(.header(.init(
@@ -371,10 +397,16 @@ final class GalleryViewModel: ObservableObject {
 
                 guard monthExpanded else { continue }
 
-                // Split into Camera & Others vs WhatsApp sub-groups
-                let waItems  = mg.items.filter { $0.isWhatsApp }
-                let camItems = mg.items.filter { !$0.isWhatsApp }
+                // Split into Camera & Others vs WhatsApp sub-groups, each ordered by
+                // the same date direction as the tree.
+                let byDate: (MediaItem, MediaItem) -> Bool = {
+                    ascending ? $0.dateTaken < $1.dateTaken : $0.dateTaken > $1.dateTaken
+                }
+                let waItems  = mg.items.filter { $0.isWhatsApp }.sorted(by: byDate)
+                let camItems = mg.items.filter { !$0.isWhatsApp }.sorted(by: byDate)
 
+                let camKey = "\(mg.key):cam"
+                let waKey  = "\(mg.key):wa"
                 for (subLabel, subKey, subItems) in [
                     ("Camera & Others", "\(mg.key):cam", camItems),
                     ("WhatsApp",        "\(mg.key):wa",  waItems)
@@ -408,17 +440,27 @@ final class GalleryViewModel: ObservableObject {
                         }
                     }
                 }
-                items.append(.footer(.init(monthKey: mg.key, structuralVersion: sv)))
+                // Only offer "Hide Month" once EVERY sub-group present has been opened at
+                // least once (ever — persisted). An empty sub-group counts as already seen,
+                // so a month with only Camera shows the button after Camera is reviewed.
+                let camSeen = camItems.isEmpty || seenSubGroups.contains(camKey)
+                let waSeen  = waItems.isEmpty  || seenSubGroups.contains(waKey)
+                if camSeen && waSeen {
+                    items.append(.footer(.init(monthKey: mg.key, structuralVersion: sv)))
+                }
             }
         }
 
         // The viewer pages through ALL visible items regardless of which groups are
         // expanded in the tree, so build `flat` independently in display order
         // (year desc → month desc → Camera & Others, then WhatsApp).
+        let byDate: (MediaItem, MediaItem) -> Bool = {
+            ascending ? $0.dateTaken < $1.dateTaken : $0.dateTaken > $1.dateTaken
+        }
         for year in years {
-            for mg in byYear[year]!.sorted(by: { $0.key > $1.key }) {
-                flat.append(contentsOf: mg.items.filter { !$0.isWhatsApp })
-                flat.append(contentsOf: mg.items.filter { $0.isWhatsApp })
+            for mg in byYear[year]!.sorted(by: { ascending ? $0.key < $1.key : $0.key > $1.key }) {
+                flat.append(contentsOf: mg.items.filter { !$0.isWhatsApp }.sorted(by: byDate))
+                flat.append(contentsOf: mg.items.filter { $0.isWhatsApp }.sorted(by: byDate))
             }
         }
         return BuiltGallery(items: items, flat: flat)
