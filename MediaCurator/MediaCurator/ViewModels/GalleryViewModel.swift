@@ -21,6 +21,38 @@ final class GalleryViewModel: ObservableObject {
     @Published var lastBatchSize: Int = 0
     @Published var authorizationStatus: PHAuthorizationStatus = .notDetermined
 
+    // MARK: - Selection mode
+
+    @Published var selectionMode = false
+    @Published var selectedIDs: Set<String> = []
+
+    var selectedItems: [MediaItem] { flatMediaItems.filter { selectedIDs.contains($0.id) } }
+    var selectedBytes: Int64 { selectedItems.reduce(0) { $0 + $1.size } }
+
+    func enterSelection(_ id: String) {
+        selectionMode = true
+        selectedIDs = [id]
+    }
+
+    func toggleSelection(_ id: String) {
+        if selectedIDs.contains(id) { selectedIDs.remove(id) } else { selectedIDs.insert(id) }
+    }
+
+    func exitSelection() {
+        selectionMode = false
+        selectedIDs = []
+    }
+
+    func deleteSelected() {
+        let items = selectedItems
+        exitSelection()
+        requestDelete(items)
+    }
+
+    func shareSelected() {
+        shareItems(selectedItems)
+    }
+
     /// Non-nil while an undo window is open after a delete. Drives the undo toast.
     @Published var pendingUndo: PendingUndo? = nil
 

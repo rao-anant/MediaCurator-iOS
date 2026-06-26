@@ -48,7 +48,9 @@ struct GalleryView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if let undo = vm.pendingUndo {
+            if vm.selectionMode {
+                selectionBar
+            } else if let undo = vm.pendingUndo {
                 toast(message: undo.message) { vm.undoDelete() }
             } else if let done = vm.doneToast {
                 toast(message: "\(done.label) marked done") { vm.undoMarkDone() }
@@ -65,11 +67,16 @@ struct GalleryView: View {
         .animation(.spring(duration: 0.3), value: vm.pendingUndo)
         .animation(.spring(duration: 0.3), value: vm.doneToast)
         .animation(.spring(duration: 0.3), value: filterToast)
-        .navigationTitle("Gallery")
+        .animation(.spring(duration: 0.3), value: vm.selectionMode)
+        .navigationTitle(vm.selectionMode ? "\(vm.selectedIDs.count) selected" : "Gallery")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button { showingStats = true } label: { Image(systemName: "info.circle") }
+                if vm.selectionMode {
+                    Button("Cancel") { vm.exitSelection() }
+                } else {
+                    Button { showingStats = true } label: { Image(systemName: "info.circle") }
+                }
             }
         }
         .sheet(isPresented: $showingStats) { StatsView() }
@@ -121,6 +128,34 @@ struct GalleryView: View {
         }
     }
 
+    // MARK: - Selection bar
+
+    private var selectionBar: some View {
+        HStack(spacing: 24) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(vm.selectedIDs.count) selected").font(.subheadline).bold()
+                Text(Formatters.bytes(vm.selectedBytes)).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button {
+                vm.shareSelected()
+            } label: { Image(systemName: "square.and.arrow.up").font(.title3) }
+                .disabled(vm.selectedIDs.isEmpty)
+            Button(role: .destructive) {
+                vm.deleteSelected()
+            } label: { Image(systemName: "trash").font(.title3) }
+                .disabled(vm.selectedIDs.isEmpty)
+                .tint(.red)
+        }
+        .padding(.horizontal, 20).padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .shadow(radius: 8, y: 2)
+        .padding(.horizontal, 12).padding(.bottom, 16)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
     // MARK: - Toast
 
     private func toast(message: String, undo: @escaping () -> Void) -> some View {
@@ -153,7 +188,16 @@ struct GalleryView: View {
                         case .grid(let cells, let blockID):
                             LazyVGrid(columns: gridColumns, spacing: 2) {
                                 ForEach(cells, id: \.mediaItem.id) { cell in
-                                    MediaThumbnailView(cell: cell) { selectedItem = cell.mediaItem }
+                                    MediaThumbnailView(
+                                        cell: cell,
+                                        isSelecting: vm.selectionMode,
+                                        isSelected: vm.selectedIDs.contains(cell.mediaItem.id),
+                                        onTap: {
+                                            if vm.selectionMode { vm.toggleSelection(cell.mediaItem.id) }
+                                            else { selectedItem = cell.mediaItem }
+                                        },
+                                        onLongPress: { vm.enterSelection(cell.mediaItem.id) }
+                                    )
                                 }
                             }
                             .padding(.horizontal, 2)

@@ -161,24 +161,3 @@ struct MediaViewerView: View {
         vm.requestDelete([item])
     }
 }
-
-// MARK: - Share sheet bridge
-
-@MainActor
-private func presentShareSheet(items: [Any]) {
-    guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive }),
-          let root = scene.keyWindow?.rootViewController
-    else { return }
-
-    // Walk to the top-most presented controller (the full-screen viewer).
-    var top = root
-    while let presented = top.presentedViewController { top = presented }
-
-    let vc = UIActivityViewController(activityItems: items, applicationActivities: nil)
-    vc.popoverPresentationController?.sourceView = top.view
-    vc.popoverPresentationController?.sourceRect = CGRect(
-        x: top.view.bounds.midX, y: top.view.bounds.maxY - 40, width: 0, height: 0)
-    top.present(vc, animated: true)
-}

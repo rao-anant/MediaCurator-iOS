@@ -6,7 +6,10 @@ import Photos
 struct MediaThumbnailView: View {
 
     let cell: GalleryItem.MediaCell
+    var isSelecting: Bool = false
+    var isSelected: Bool = false
     let onTap: () -> Void
+    var onLongPress: (() -> Void)? = nil
 
     @State private var image: UIImage? = nil
     /// Pixel target for the thumbnail request; the view itself fills its grid cell.
@@ -48,11 +51,28 @@ struct MediaThumbnailView: View {
                     badge(label)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
+
+                // Selection overlay
+                if isSelecting {
+                    Color.black.opacity(isSelected ? 0.25 : 0.0)
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.title3)
+                        .foregroundStyle(isSelected ? Color.accentColor : .white)
+                        .shadow(radius: 1)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .padding(4)
+                }
             }
             .clipped()
             .contentShape(Rectangle())
+            .overlay(
+                Rectangle().stroke(Color.accentColor, lineWidth: isSelected ? 3 : 0)
+            )
         }
         .buttonStyle(.plain)
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.4).onEnded { _ in onLongPress?() }
+        )
         .task(id: cell.mediaItem.id) { await loadThumbnail() }
     }
 
