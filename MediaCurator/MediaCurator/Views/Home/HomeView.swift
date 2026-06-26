@@ -68,7 +68,7 @@ struct HomeView: View {
                 case .search:            Text("Search — coming soon")
                 case .hidden:            HiddenView()
                 case .trash:             TrashView()
-                case .settings:          Text("Settings — coming soon")
+                case .settings:          SettingsView()
                 }
             }
         }
