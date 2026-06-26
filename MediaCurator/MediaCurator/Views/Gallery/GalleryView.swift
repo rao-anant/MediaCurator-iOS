@@ -12,6 +12,7 @@ struct GalleryView: View {
     @State private var showingPermissionAlert = false
     @State private var showingStats = false
     @State private var filterToast: String? = nil
+    @State private var showScrollTop = false
 
     private func showFilterToast(_ message: String) {
         filterToast = message
@@ -180,6 +181,12 @@ struct GalleryView: View {
                 if vm.isLoading && vm.galleryItems.isEmpty {
                     ProgressView("Scanning library…").padding(.top, 40)
                 }
+                // Top anchor + scroll-offset probe for the scroll-to-top FAB.
+                Color.clear.frame(height: 0).id("gallery-top")
+                    .background(GeometryReader { geo in
+                        Color.clear.preference(key: ScrollOffsetKey.self,
+                                               value: geo.frame(in: .named("galleryScroll")).minY)
+                    })
                 LazyVStack(spacing: 0) {
                     ForEach(displayBlocks) { block in
                         switch block {
@@ -207,10 +214,32 @@ struct GalleryView: View {
                     }
                 }
             }
+            .coordinateSpace(name: "galleryScroll")
+            .onPreferenceChange(ScrollOffsetKey.self) { offset in
+                // offset goes negative as content scrolls up; show FAB past ~3 rows.
+                showScrollTop = offset < -400
+            }
             .refreshable { vm.loadMedia(forceRefresh: true) }
             .onChange(of: scrollToMonthKey) { key in
                 if let key { withAnimation { proxy.scrollTo("month-\(key)", anchor: .top) } }
             }
+            .overlay(alignment: .bottomTrailing) {
+                if showScrollTop && !vm.selectionMode {
+                    Button {
+                        withAnimation { proxy.scrollTo("gallery-top", anchor: .top) }
+                    } label: {
+                        Image(systemName: "arrow.up")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .padding(14)
+                            .background(Color.accentColor, in: Circle())
+                            .shadow(radius: 4, y: 2)
+                    }
+                    .padding(20)
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .animation(.spring(duration: 0.3), value: showScrollTop)
         }
     }
 
@@ -310,4 +339,11 @@ extension SortMode {
         case .countPerMonth:   return "Most items per month"
         }
     }
+}
+
+// MARK: - Scroll offset tracking
+
+private struct ScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
