@@ -15,6 +15,7 @@ final class TrashViewModel: ObservableObject {
     private let repo  = MediaRepository()
     private let prefs = PreferencesManager()
     private let trashManager = TrashManager.shared
+    private let deletionStats = DeletionStatsStore()
 
     var totalBytes: Int64 { items.reduce(0) { $0 + $1.size } }
 
@@ -61,6 +62,8 @@ final class TrashViewModel: ObservableObject {
 
         prefs.setStagedForDeletion([])
         prefs.setLastDeletedBatch(toDelete.map { ($0.localIdentifier, $0.size) })
+        // Record lifetime "cleaned up" stats (spec §9).
+        deletionStats.record(count: result.count, bytes: toDelete.reduce(0) { $0 + $1.size })
         items = []
         await MediaCache.shared.invalidate()
     }

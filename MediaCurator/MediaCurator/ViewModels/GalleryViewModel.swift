@@ -286,6 +286,29 @@ final class GalleryViewModel: ObservableObject {
 
     // MARK: - Type filters
 
+    /// Toggle a type filter, enforcing the "at least one filter must stay active" floor (spec §3).
+    /// Returns false if the toggle was rejected (would have turned off the last active filter).
+    @discardableResult
+    func toggleTypeFilter(_ type: MediaType) -> Bool {
+        let isOn: Bool
+        switch type {
+        case .image: isOn = includePhoto
+        case .video: isOn = includeVideo
+        case .pdf:   isOn = includePdf
+        case .audio: isOn = includeAudio
+        }
+        let activeCount = [includePhoto, includeVideo, includePdf, includeAudio].filter { $0 }.count
+        if isOn && activeCount == 1 { return false }   // can't disable the last active filter
+
+        switch type {
+        case .image: setIncludePhoto(!includePhoto)
+        case .video: setIncludeVideo(!includeVideo)
+        case .pdf:   setIncludePdf(!includePdf)
+        case .audio: setIncludeAudio(!includeAudio)
+        }
+        return true
+    }
+
     func setIncludePhoto(_ v: Bool) {
         guard includePhoto != v else { return }
         includePhoto = v; prefs.saveIncludePhoto(v)

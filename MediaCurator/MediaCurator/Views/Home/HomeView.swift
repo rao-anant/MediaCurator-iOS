@@ -6,6 +6,7 @@ struct HomeView: View {
 
     @StateObject private var vm = HomeViewModel()
     @State private var path = NavigationPath()
+    @State private var showingStats = false
 
     private let twoColumns = [GridItem(.flexible(), spacing: 12),
                               GridItem(.flexible(), spacing: 12)]
@@ -48,12 +49,18 @@ struct HomeView: View {
             .navigationTitle("MediaCurator")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button { showingStats = true } label: {
+                        Image(systemName: "info.circle")
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink(value: NavDestination.settings) {
                         Image(systemName: "gearshape")
                     }
                 }
             }
+            .sheet(isPresented: $showingStats) { StatsView() }
             .navigationDestination(for: NavDestination.self) { dest in
                 switch dest {
                 case .gallery(let key):  GalleryView(scrollToMonthKey: key)

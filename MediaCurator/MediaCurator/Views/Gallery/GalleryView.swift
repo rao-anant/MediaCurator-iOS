@@ -10,12 +10,32 @@ struct GalleryView: View {
 
     @State private var selectedItem: MediaItem? = nil
     @State private var showingPermissionAlert = false
+    @State private var showingStats = false
+    @State private var filterToast: String? = nil
+
+    private func showFilterToast(_ message: String) {
+        filterToast = message
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            if filterToast == message { filterToast = nil }
+        }
+    }
 
     var body: some View {
         Group {
             switch vm.authorizationStatus {
             case .authorized, .limited:
                 VStack(spacing: 0) {
+                    FilterChipsBar(
+                        stats: vm.mediaStats,
+                        includePhoto: vm.includePhoto,
+                        includeVideo: vm.includeVideo,
+                        includePdf: vm.includePdf,
+                        includeAudio: vm.includeAudio,
+                        onToggle: { vm.toggleTypeFilter($0) },
+                        onRejected: { showFilterToast("At least one filter must be active") }
+                    )
+                    Divider()
                     sortBar
                     galleryContent
                 }
@@ -32,13 +52,27 @@ struct GalleryView: View {
                 toast(message: undo.message) { vm.undoDelete() }
             } else if let done = vm.doneToast {
                 toast(message: "\(done.label) marked done") { vm.undoMarkDone() }
+            } else if let msg = filterToast {
+                Text(msg)
+                    .font(.subheadline)
+                    .padding(.horizontal, 20).padding(.vertical, 12)
+                    .background(.regularMaterial, in: Capsule())
+                    .shadow(radius: 8, y: 2)
+                    .padding(.bottom, 24)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .animation(.spring(duration: 0.3), value: vm.pendingUndo)
         .animation(.spring(duration: 0.3), value: vm.doneToast)
+        .animation(.spring(duration: 0.3), value: filterToast)
         .navigationTitle("Gallery")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { galleryToolbar }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button { showingStats = true } label: { Image(systemName: "info.circle") }
+            }
+        }
+        .sheet(isPresented: $showingStats) { StatsView() }
         .onAppear {
             let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
             vm.authorizationStatus = status
@@ -216,23 +250,8 @@ struct GalleryView: View {
         .padding(32)
     }
 
-    // MARK: - Toolbar
-
-    @ToolbarContentBuilder
-    private var galleryToolbar: some ToolbarContent {
-        // Sort lives in the always-visible sort bar; the toolbar keeps just the type filter.
-        ToolbarItem(placement: .navigationBarTrailing) {
-            // Type filter chips
-            Menu {
-                Toggle("Photos",  isOn: Binding(get: { vm.includePhoto }, set: { vm.setIncludePhoto($0) }))
-                Toggle("Videos",  isOn: Binding(get: { vm.includeVideo }, set: { vm.setIncludeVideo($0) }))
-                Toggle("PDFs",    isOn: Binding(get: { vm.includePdf },   set: { vm.setIncludePdf($0) }))
-                Toggle("Audio",   isOn: Binding(get: { vm.includeAudio }, set: { vm.setIncludeAudio($0) }))
-            } label: {
-                Image(systemName: "line.3.horizontal.decrease.circle")
-            }
-        }
-    }
+    // Sort lives in the sort bar; type filters in the FilterChipsBar. The toolbar's
+    // ⓘ Stats / Refresh / Restore-last-deleted items (spec §3) are not built yet.
 }
 
 // MARK: - SortMode display names
