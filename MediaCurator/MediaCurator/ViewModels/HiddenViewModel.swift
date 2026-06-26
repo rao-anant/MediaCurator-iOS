@@ -18,6 +18,9 @@ final class HiddenViewModel: ObservableObject {
     @Published var months: [DoneMonth] = []
     @Published var isLoading = false
 
+    /// Most recently hidden month key (if still hidden) — the Hidden screen jumps to it.
+    var lastHiddenMonth: String? { prefs.getLastHiddenMonth() }
+
     /// Distinct years that have hidden months, newest first.
     var years: [Int] {
         var seen = Set<Int>()

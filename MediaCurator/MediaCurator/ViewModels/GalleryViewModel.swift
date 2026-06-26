@@ -370,8 +370,16 @@ final class GalleryViewModel: ObservableObject {
         case .pdf:   isOn = includePdf
         case .audio: isOn = includeAudio
         }
-        let activeCount = [includePhoto, includeVideo, includePdf, includeAudio].filter { $0 }.count
-        if isOn && activeCount == 1 { return false }   // can't disable the last active filter
+        // Count active filters only among types that actually exist in the library — a
+        // type with no items (e.g. PDF/audio in v1) must not count toward the floor, or the
+        // user could disable every visible chip.
+        let activeAndPresent = [
+            (includePhoto, mediaStats.totalPhotos),
+            (includeVideo, mediaStats.totalVideos),
+            (includePdf,   mediaStats.totalPdfs),
+            (includeAudio, mediaStats.totalAudios),
+        ].filter { $0.0 && $0.1 > 0 }.count
+        if isOn && activeAndPresent <= 1 { return false }   // can't disable the last visible filter
 
         switch type {
         case .image: setIncludePhoto(!includePhoto)

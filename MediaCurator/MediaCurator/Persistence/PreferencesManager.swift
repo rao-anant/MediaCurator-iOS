@@ -17,6 +17,7 @@ final class PreferencesManager {
         static let expandedSubGroups    = "expanded_subgroups"
         static let seenSubGroups        = "seen_subgroups"
         static let stagedForDeletion    = "staged_for_deletion"
+        static let lastHiddenMonth      = "last_hidden_month"
         static let pdfContentSearch     = "pdf_content_search"
         static let photoDupDetection    = "photo_duplicate_detection"
         static let seenOnboarding       = "seen_onboarding"
@@ -34,6 +35,15 @@ final class PreferencesManager {
         var current = getDoneMonths()
         current.insert(Self.monthKey(year: year, month: month))
         defaults.set(Array(current), forKey: Key.doneMonths)
+        // Remember the most recently hidden month so the Hidden screen can jump to it.
+        defaults.set(Self.monthKey(year: year, month: month), forKey: Key.lastHiddenMonth)
+    }
+
+    /// The most recently hidden month key, if it's still hidden; else nil.
+    func getLastHiddenMonth() -> String? {
+        guard let key = defaults.string(forKey: Key.lastHiddenMonth),
+              getDoneMonths().contains(key) else { return nil }
+        return key
     }
 
     func unmarkMonthDone(year: Int, month: Int) {

@@ -150,7 +150,15 @@ struct HiddenView: View {
     }
 
     /// Keep the year/month selection valid after the month list changes.
+    /// On first land, jump to the month the user most recently hid (a handy "which month did
+    /// I just hide?" shortcut); afterwards keep the current selection valid.
     private func syncSelection() {
+        if selectedYear == nil, let last = vm.lastHiddenMonth,
+           let y = Int(last.prefix(4)), vm.years.contains(y) {
+            selectedYear = y
+            selectedMonthKey = last
+            return
+        }
         if selectedYear == nil || !vm.years.contains(selectedYear!) {
             selectedYear = vm.years.first
         }

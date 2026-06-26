@@ -70,6 +70,12 @@ struct HomeView: View {
             }
         }
         .onAppear { vm.load() }
+        // Reload whenever we return to the root (NavigationStack doesn't reliably re-fire
+        // onAppear on pop), so curation progress, hidden count, and trash count refresh
+        // after the user hides a month or stages a delete on a pushed screen.
+        .onChange(of: path.count) { newCount in
+            if newCount == 0 { vm.load() }
+        }
     }
 }
 
