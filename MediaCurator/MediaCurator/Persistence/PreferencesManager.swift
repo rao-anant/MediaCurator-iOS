@@ -18,6 +18,8 @@ final class PreferencesManager {
         static let seenSubGroups        = "seen_subgroups"
         static let stagedForDeletion    = "staged_for_deletion"
         static let lastHiddenMonth      = "last_hidden_month"
+        static let scrollHintRetired    = "scroll_hint_retired"
+        static let walkedCounts         = "walked_month_counts"
         static let pdfContentSearch     = "pdf_content_search"
         static let photoDupDetection    = "photo_duplicate_detection"
         static let seenOnboarding       = "seen_onboarding"
@@ -44,6 +46,22 @@ final class PreferencesManager {
         guard let key = defaults.string(forKey: Key.lastHiddenMonth),
               getDoneMonths().contains(key) else { return nil }
         return key
+    }
+
+    // MARK: - Curation coaching / walk-through (spec §3, CURATION_REGRESSION_TESTS)
+
+    /// True once the user has hidden their first month or dismissed a hint — after which
+    /// reviewed months jump straight to Hide with no teaser/coaching.
+    func isScrollHintRetired() -> Bool { defaults.bool(forKey: Key.scrollHintRetired) }
+    func setScrollHintRetired() { defaults.set(true, forKey: Key.scrollHintRetired) }
+
+    /// Per-month item count captured when a month was fully walked (revisit shortcut).
+    func getWalkedCounts() -> [String: Int] {
+        (defaults.dictionary(forKey: Key.walkedCounts) as? [String: Int]) ?? [:]
+    }
+    func setWalkedCount(month: String, count: Int) {
+        var m = getWalkedCounts(); m[month] = count
+        defaults.set(m, forKey: Key.walkedCounts)
     }
 
     func unmarkMonthDone(year: Int, month: Int) {

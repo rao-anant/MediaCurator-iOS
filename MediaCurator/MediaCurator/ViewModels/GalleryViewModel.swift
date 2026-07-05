@@ -101,6 +101,8 @@ final class GalleryViewModel: ObservableObject {
     private var seenSubGroups:     Set<String> = []
     /// Full type presence per "<month>:<sub>" ignoring the chip filter (recomputed each load).
     private var monthTypePresence: [String: Set<MediaType>] = [:]
+    /// Full item count per month (chip-independent) — for the revisit shortcut.
+    private var monthItemCounts: [String: Int] = [:]
 
     private var loadTask: Task<Void, Never>? = nil
     private var photoLibraryObserver: PhotoLibraryObserver? = nil
@@ -130,6 +132,8 @@ final class GalleryViewModel: ObservableObject {
         self.expandedSubGroups = prefs.getExpandedSubGroups()
         self.seenSubGroups     = prefs.getSeenSubGroups()
         self.stagedIDs         = prefs.getStagedForDeletion()
+        self.scrollHintRetired = prefs.isScrollHintRetired()
+        self.walkedCounts      = prefs.getWalkedCounts()
 
         self.lastBatchSize = prefs.getLastDeletedBatch().count
 
@@ -188,14 +192,17 @@ final class GalleryViewModel: ObservableObject {
         // "Hide Month" gate needs to know every type that exists so a disabled chip can't
         // sneak the button on. Keyed "<month>:<sub>" → set of types present.
         var presence: [String: Set<MediaType>] = [:]
+        var itemCounts: [String: Int] = [:]
         let cal = Calendar.current
         for item in filtered {
             let y = cal.component(.year, from: item.dateTaken)
             let m = cal.component(.month, from: item.dateTaken)
-            let key = "\(PreferencesManager.monthKey(year: y, month: m)):\(item.isWhatsApp ? "wa" : "cam")"
-            presence[key, default: []].insert(item.type)
+            let monthKey = PreferencesManager.monthKey(year: y, month: m)
+            presence["\(monthKey):\(item.isWhatsApp ? "wa" : "cam")", default: []].insert(item.type)
+            itemCounts[monthKey, default: 0] += 1
         }
         monthTypePresence = presence
+        monthItemCounts = itemCounts
 
         // Apply type filters
         let typeFiltered = filtered.filter { item in
@@ -213,6 +220,17 @@ final class GalleryViewModel: ObservableObject {
         galleryItems   = built.items
         flatMediaItems = built.flat
         mediaStats     = computeStats(all: allMedia, done: done)
+
+        // Open-month metrics for the pinned Hide bar + walk gate.
+        if let open = openMonthKey {
+            openMonthItemCount     = monthItemCounts[open] ?? 0
+            openMonthRenderedLength = built.items.filter { $0.monthKey == open }.count
+        } else {
+            openMonthItemCount = 0
+            openMonthRenderedLength = 0
+        }
+        recomputeHideBar()
+
         DebugLog.i("gallery", "load done items=\(galleryItems.count)")
     }
 
@@ -315,21 +333,126 @@ final class GalleryViewModel: ObservableObject {
     /// The single month currently open in the accordion (nil = none). Drives the pinned bar.
     @Published var openMonthKey: String? = nil
 
+    // MARK: - Pinned Hide-month bar (spec §3 / CURATION_REGRESSION_TESTS)
+
+    @Published var hideBarState: HideBarState = .none
+    @Published var hideBarMonthLabel = ""
+    @Published var hideBarHintText = ""
+
+    private var walk = WalkLatch()
+    private var scrollHintRetired = false
+    private var walkedCounts: [String: Int] = [:]
+    /// The open month's full item count (chip-independent) and rendered row count.
+    private var openMonthItemCount = 0
+    private var openMonthRenderedLength = 0
+
     func toggleMonthExpansion(_ key: String) {
         if expandedMonths.contains(key) {
             expandedMonths.remove(key)
             openMonthKey = nil
+            hideBarState = .none
         } else {
             // Accordion: only one month open at a time. Opening a month collapses the
             // previously open month and all sub-group expansions (spec §3).
             expandedMonths = [key]
             expandedSubGroups.removeAll()
             openMonthKey = key
+            walk.opened(key)   // begin a fresh walk (nothing seen yet)
             prefs.saveExpandedSubGroups(expandedSubGroups)
         }
         prefs.saveExpandedMonths(expandedMonths)
         structuralVersion += 1
         loadMedia(forceRefresh: false)
+    }
+
+    /// Fed by the gallery when the open month's header/footer visibility changes (settled list).
+    func evaluateWalk(headerVisible: Bool, footerVisible: Bool) {
+        guard let open = openMonthKey else { return }
+        walk.viewportEvaluated(openMonth: open, headerVisible: headerVisible,
+                               footerVisible: footerVisible, renderedLength: openMonthRenderedLength)
+        if walk.isReached(open) {
+            walkedCounts[open] = openMonthItemCount
+            prefs.setWalkedCount(month: open, count: openMonthItemCount)
+        }
+        recomputeHideBar()
+    }
+
+    /// Tap on the pinned "Hide {Month}" bar.
+    func hideOpenMonth() {
+        guard let open = openMonthKey else { return }
+        walkedCounts[open] = openMonthItemCount
+        prefs.setWalkedCount(month: open, count: openMonthItemCount)
+        retireHints()
+        openMonthKey = nil
+        hideBarState = .none
+        markMonthDone(key: open)   // hides + shows the undo toast + rebuilds
+    }
+
+    /// Dismiss (✕) a coach hint — retires all future coaching.
+    func dismissHideHint() {
+        retireHints()
+        recomputeHideBar()
+    }
+
+    private func retireHints() {
+        scrollHintRetired = true
+        prefs.setScrollHintRetired()
+    }
+
+    private func recomputeHideBar() {
+        guard let open = openMonthKey else { hideBarState = .none; return }
+        let reviewed = monthFullyReviewed(open)
+        let revisit = walkedCounts[open].map {
+            WalkedMonthRule.stillWalked(walkedCount: $0, currentCount: openMonthItemCount)
+        } ?? false
+        let reached = walk.isReached(open) || revisit
+        let hint = reviewHintText(open)
+        let state = HideBarDecision.decide(showHideButton: reviewed,
+                                           reachedEnd: reached,
+                                           scrollHintRetired: scrollHintRetired,
+                                           hasReviewHint: !reviewed && hint != nil)
+        hideBarState = state
+        hideBarMonthLabel = Formatters.monthLabel(from: open)
+        switch state {
+        case .reviewHint:   hideBarHintText = hint ?? ""
+        case .scrollTeaser: hideBarHintText = "Delete junk as you scroll — hide \(hideBarMonthLabel) at the end"
+        case .hide, .none:  hideBarHintText = ""
+        }
+    }
+
+    /// Text nudging the user toward the still-unreviewed part of the open month, or nil if done.
+    private func reviewHintText(_ month: String) -> String? {
+        if monthFullyReviewed(month) { return nil }
+        let label = Formatters.monthLabel(from: month)
+        let camTypes = monthTypePresence["\(month):cam"] ?? []
+        let waTypes  = monthTypePresence["\(month):wa"]  ?? []
+        // A present type with its chip off → the user can't review it until they enable it.
+        let allPresent = camTypes.union(waTypes)
+        if allPresent.contains(where: { !isChipOn($0) }) {
+            return "Turn on all type filters to review \(label)"
+        }
+        let camSeen = subgroupFullySeen(month, "cam")
+        let waSeen  = subgroupFullySeen(month, "wa")
+        let camPresent = !camTypes.isEmpty
+        let waPresent  = !waTypes.isEmpty
+        if camPresent && waPresent && !camSeen && !waSeen { return "Open both sections to review \(label)" }
+        if waPresent && !waSeen  { return "Also open WhatsApp to review \(label)" }
+        if camPresent && !camSeen { return "Also open Camera & Others to review \(label)" }
+        return "Open \(label) to review it"
+    }
+
+    private func subgroupFullySeen(_ month: String, _ sub: String) -> Bool {
+        let types = monthTypePresence["\(month):\(sub)"] ?? []
+        return types.allSatisfy { seenSubGroups.contains("\(month):\(sub):\($0.rawValue)") }
+    }
+
+    private func isChipOn(_ type: MediaType) -> Bool {
+        switch type {
+        case .image: return includePhoto
+        case .video: return includeVideo
+        case .pdf:   return includePdf
+        case .audio: return includeAudio
+        }
     }
 
     func toggleSubGroupExpansion(_ key: String) {
@@ -557,13 +680,9 @@ final class GalleryViewModel: ObservableObject {
                         }
                     }
                 }
-                // Offer "Hide Month" only once EVERY (sub-group, type) that actually exists in
-                // the month has been reviewed — i.e. the sub-group was opened while that type's
-                // chip was on. Uses full type presence (chip-independent), so a disabled filter
-                // can't reveal the button early. Persisted, so reviewing can span sessions.
-                if monthFullyReviewed(mg.key) {
-                    items.append(.footer(.init(monthKey: mg.key, structuralVersion: sv)))
-                }
+                // Footer is the month's bottom anchor for the walk gate (a thin divider now;
+                // the Hide action moved to the pinned bar). Always render it for the open month.
+                items.append(.footer(.init(monthKey: mg.key, structuralVersion: sv)))
             }
         }
 

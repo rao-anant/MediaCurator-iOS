@@ -50,6 +50,18 @@ struct WalkLatch {
         if seenHeader && seenFooter { reached.insert(month) }
     }
 
+    /// Convenience for UI layers that know header/footer visibility rather than raw indices.
+    /// Maps onto the position-based rule so the same tested semantics apply.
+    mutating func viewportEvaluated(openMonth month: String,
+                                    headerVisible: Bool, footerVisible: Bool,
+                                    renderedLength: Int) {
+        viewportEvaluated(openMonth: month,
+                          headerPos: 0, footerPos: 1,
+                          first: headerVisible ? 0 : 1,
+                          last: footerVisible ? 1 : 0,
+                          renderedLength: renderedLength)
+    }
+
     func isReached(_ month: String) -> Bool { reached.contains(month) }
 
     /// Curation-progress reset — clear all walk state (WL-6).

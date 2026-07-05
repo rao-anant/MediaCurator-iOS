@@ -13,6 +13,9 @@ struct GalleryView: View {
     @State private var showingStats = false
     @State private var filterToast: String? = nil
     @State private var showScrollTop = false
+    @State private var headerVisibleMonth: String? = nil
+    @State private var footerVisibleMonth: String? = nil
+    @State private var hintBob = false
 
     private func showFilterToast(_ message: String) {
         filterToast = message
@@ -55,6 +58,8 @@ struct GalleryView: View {
                 toast(message: undo.message) { vm.undoDelete() }
             } else if let done = vm.doneToast {
                 toast(message: "\(done.label) marked done") { vm.undoMarkDone() }
+            } else if vm.hideBarState != .none && vm.sortMode != .sizeAbsolute {
+                hideMonthBar
             } else if let msg = filterToast {
                 Text(msg)
                     .font(.subheadline)
@@ -69,6 +74,7 @@ struct GalleryView: View {
         .animation(.spring(duration: 0.3), value: vm.doneToast)
         .animation(.spring(duration: 0.3), value: filterToast)
         .animation(.spring(duration: 0.3), value: vm.selectionMode)
+        .animation(.spring(duration: 0.3), value: vm.hideBarState)
         .navigationTitle(vm.selectionMode ? "\(vm.selectedIDs.count) selected" : "Gallery")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -127,6 +133,55 @@ struct GalleryView: View {
             .buttonStyle(.plain)
             Divider()
         }
+    }
+
+    // MARK: - Pinned Hide-month bar (spec §3)
+
+    @ViewBuilder
+    private var hideMonthBar: some View {
+        switch vm.hideBarState {
+        case .hide:
+            Button {
+                vm.hideOpenMonth()
+            } label: {
+                Label("Hide \(vm.hideBarMonthLabel)", systemImage: "checkmark")
+                    .font(.headline).foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
+            }
+            .padding(.horizontal, 12).padding(.bottom, 16)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        case .scrollTeaser, .reviewHint:
+            hintBar(text: vm.hideBarHintText)
+        case .none:
+            EmptyView()
+        }
+    }
+
+    /// Amber coach hint with an animated down-chevron "wave" and a dismiss ✕.
+    private func hintBar(text: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "chevron.down")
+                .font(.subheadline.bold())
+                .foregroundStyle(.orange)
+                .offset(y: hintBob ? 2 : -2)
+                .animation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true), value: hintBob)
+                .onAppear { hintBob = true }
+            Text(text)
+                .font(.subheadline.bold())
+                .foregroundStyle(.orange)
+            Spacer()
+            Button { vm.dismissHideHint() } label: {
+                Image(systemName: "xmark").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.orange.opacity(0.4), lineWidth: 1))
+        .padding(.horizontal, 12).padding(.bottom, 16)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     // MARK: - Selection bar
@@ -283,24 +338,27 @@ struct GalleryView: View {
             YearHeaderRow(header: y) { vm.toggleYearExpansion(y.year) }
         case .header(let h):
             MonthHeaderRow(header: h, onTap: { vm.toggleMonthExpansion(h.monthKey) })
+                .onAppear { if h.monthKey == vm.openMonthKey { headerVisibleMonth = h.monthKey; pushWalk() } }
+                .onDisappear { if headerVisibleMonth == h.monthKey { headerVisibleMonth = nil; pushWalk() } }
         case .subHeader(let s):
             SubHeaderRow(sub: s) { vm.toggleSubGroupExpansion(s.subKey) }
         case .footer(let f):
-            Button {
-                vm.markMonthDone(key: f.monthKey)
-            } label: {
-                Label("Hide Month from this app", systemImage: "eye.slash")
-                    .font(.subheadline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-            }
-            .buttonStyle(.bordered)
-            .tint(.accentColor)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            // Thin divider + the open month's bottom anchor for the walk gate. Visibility of
+            // this row (and the month header) drives WalkLatch via evaluateWalk.
+            Divider()
+                .padding(.vertical, 6)
+                .onAppear { footerVisibleMonth = f.monthKey; pushWalk() }
+                .onDisappear { if footerVisibleMonth == f.monthKey { footerVisibleMonth = nil; pushWalk() } }
         case .media:
             EmptyView()   // media is rendered via grid blocks, never here
         }
+    }
+
+    /// Feed the open month's header/footer visibility into the walk gate.
+    private func pushWalk() {
+        guard let open = vm.openMonthKey else { return }
+        vm.evaluateWalk(headerVisible: headerVisibleMonth == open,
+                        footerVisible: footerVisibleMonth == open)
     }
 
     // MARK: - Permission denied

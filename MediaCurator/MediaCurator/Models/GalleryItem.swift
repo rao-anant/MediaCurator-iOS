@@ -32,6 +32,18 @@ enum GalleryItem: Identifiable {
         }
     }
 
+    /// The month this row belongs to (nil for year headers) — used to measure a month's
+    /// rendered length for the walk gate.
+    var monthKey: String? {
+        switch self {
+        case .yearHeader:         return nil
+        case .header(let h):      return h.monthKey
+        case .subHeader(let s):   return s.monthKey
+        case .media(let m):       return m.monthKey
+        case .footer(let f):      return f.monthKey
+        }
+    }
+
     // MARK: - Nested types
 
     struct YearHeader {
