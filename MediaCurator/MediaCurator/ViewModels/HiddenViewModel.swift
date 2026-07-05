@@ -18,6 +18,18 @@ final class HiddenViewModel: ObservableObject {
     @Published var months: [DoneMonth] = []
     @Published var isLoading = false
 
+    private var allMedia: [MediaItem] = []
+
+    /// Items in a hidden month, newest first — for the preview grid.
+    func items(forMonth key: String) -> [MediaItem] {
+        let cal = Calendar.current
+        return allMedia.filter {
+            let y = cal.component(.year, from: $0.dateTaken)
+            let m = cal.component(.month, from: $0.dateTaken)
+            return PreferencesManager.monthKey(year: y, month: m) == key
+        }.sorted { $0.dateTaken > $1.dateTaken }
+    }
+
     /// Most recently hidden month key (if still hidden) — the Hidden screen jumps to it.
     var lastHiddenMonth: String? { prefs.getLastHiddenMonth() }
 
@@ -46,6 +58,7 @@ final class HiddenViewModel: ObservableObject {
             defer { isLoading = false }
 
             let media = await MediaCache.shared.get(repo: repo)
+            allMedia = media
             let done  = prefs.getDoneMonths()
             let cal   = Calendar.current
 

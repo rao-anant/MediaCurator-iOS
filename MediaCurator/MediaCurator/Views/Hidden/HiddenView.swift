@@ -1,14 +1,17 @@
 import SwiftUI
 
-/// Manage months marked done — pick a Year, then a Month, and unhide it.
-/// Mirrors Android's `HiddenActivity`.
+/// Preview screen for hidden months (spec §5). Picking a month PREVIEWS its items in a grid
+/// while it stays hidden; the only way to unhide is the explicit "Unhide this month" button.
+/// No confirmation dialogs — switching months or leaving changes nothing.
 struct HiddenView: View {
 
     @StateObject private var vm = HiddenViewModel()
 
     @State private var selectedYear: Int? = nil
     @State private var selectedMonthKey: String? = nil
-    @State private var lastUnhidden: String? = nil   // label of the just-unhidden month
+    @State private var didAutoPreview = false
+
+    private let gridColumns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 3)
 
     var body: some View {
         Group {
@@ -20,65 +23,58 @@ struct HiddenView: View {
         }
         .navigationTitle("Hidden Months")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            vm.load()
-        }
-        .onChange(of: vm.months.count) { _ in syncSelection() }
+        .onAppear { vm.load() }
+        .onChange(of: vm.months.count) { _ in autoPreviewIfNeeded() }
     }
 
-    // MARK: - Content
-
     private var content: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Two dropdowns: Year then Month.
+        VStack(spacing: 0) {
             HStack(spacing: 12) {
                 yearMenu
                 monthMenu
             }
+            .padding()
 
-            // Unhide action for the selected month (stays available for the next one).
-            Button {
-                unhideSelected()
-            } label: {
-                Label("Unhide", systemImage: "eye")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(selectedMonthKey == nil)
-
-            if let label = lastUnhidden {
-                Text("\(label) unhidden — it's back in the gallery.")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
-
-            // The selected year's hidden months, auto-shown.
-            if let year = selectedYear {
-                List {
-                    Section("Hidden in \(String(year))") {
-                        ForEach(vm.months(in: year)) { month in
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(month.label).font(.subheadline).bold()
-                                    Text("\(Formatters.countShort(month.count)) items · \(Formatters.bytes(month.totalBytes))")
-                                        .font(.caption).foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                if selectedMonthKey == month.key {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(Color.accentColor)
-                                }
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture { selectedMonthKey = month.key }
+            if let key = selectedMonthKey {
+                ScrollView {
+                    LazyVGrid(columns: gridColumns, spacing: 2) {
+                        ForEach(vm.items(forMonth: key)) { item in
+                            MediaThumbnailView(cell: .init(mediaItem: item, monthKey: key,
+                                                           indexInMonth: 0, dateLabel: nil,
+                                                           structuralVersion: 0)) {}
                         }
                     }
+                    .padding(.horizontal, 2)
                 }
-                .listStyle(.insetGrouped)
+            } else {
+                Spacer()
+                Text("Pick a year and month above to view it.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
             }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if let key = selectedMonthKey {
+                stillHiddenBar(key: key)
+            }
+        }
+    }
+
+    private func stillHiddenBar(key: String) -> some View {
+        HStack {
+            Text("\(Formatters.monthLabel(from: key)) · still hidden")
+                .font(.subheadline).foregroundStyle(.secondary)
             Spacer()
+            Button("Unhide this month") {
+                vm.unhide(key)
+                selectedMonthKey = nil
+                if let y = selectedYear, vm.months(in: y).isEmpty { selectedYear = nil }
+            }
+            .buttonStyle(.borderedProminent)
+            .font(.subheadline)
         }
         .padding()
+        .background(.regularMaterial)
     }
 
     private var yearMenu: some View {
@@ -90,8 +86,7 @@ struct HiddenView: View {
                 }
             }
         } label: {
-            dropdownLabel(title: "Year",
-                          value: selectedYear.map(String.init) ?? "Select")
+            dropdownLabel(title: "Year", value: selectedYear.map(String.init) ?? "Select")
         }
     }
 
@@ -99,12 +94,13 @@ struct HiddenView: View {
         Menu {
             if let year = selectedYear {
                 ForEach(vm.months(in: year)) { month in
-                    Button(month.label) { selectedMonthKey = month.key }
+                    Button("\(month.label) · \(Formatters.countShort(month.count)) items") {
+                        selectedMonthKey = month.key
+                    }
                 }
             }
         } label: {
-            dropdownLabel(title: "Month",
-                          value: selectedMonthLabel ?? "Select")
+            dropdownLabel(title: "Month", value: selectedMonthLabel ?? "Select")
         }
         .disabled(selectedYear == nil)
     }
@@ -127,48 +123,25 @@ struct HiddenView: View {
         VStack(spacing: 12) {
             Image(systemName: "eye.slash").font(.system(size: 52)).foregroundStyle(.secondary)
             Text("Nothing Hidden").font(.title3).bold()
-            Text("Months you mark done in the gallery appear here, where you can bring them back.")
+            Text("You haven't hidden any months yet. Months you hide will appear here to bring back.")
                 .multilineTextAlignment(.center)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .font(.subheadline).foregroundStyle(.secondary)
         }
         .padding(40)
     }
-
-    // MARK: - Helpers
 
     private var selectedMonthLabel: String? {
         guard let key = selectedMonthKey else { return nil }
         return vm.months.first { $0.key == key }?.label
     }
 
-    private func unhideSelected() {
-        guard let key = selectedMonthKey else { return }
-        lastUnhidden = vm.months.first { $0.key == key }?.label
-        vm.unhide(key)
-        // syncSelection runs via onChange(of: months.count)
-    }
-
-    /// Keep the year/month selection valid after the month list changes.
-    /// On first land, jump to the month the user most recently hid (a handy "which month did
-    /// I just hide?" shortcut); afterwards keep the current selection valid.
-    private func syncSelection() {
-        if selectedYear == nil, let last = vm.lastHiddenMonth,
-           let y = Int(last.prefix(4)), vm.years.contains(y) {
+    /// On first entry, auto-preview the most recently hidden month (still hidden) — spec §5.
+    private func autoPreviewIfNeeded() {
+        guard !didAutoPreview, selectedMonthKey == nil else { return }
+        didAutoPreview = true
+        if let last = vm.lastHiddenMonth, let y = Int(last.prefix(4)), vm.years.contains(y) {
             selectedYear = y
             selectedMonthKey = last
-            return
-        }
-        if selectedYear == nil || !vm.years.contains(selectedYear!) {
-            selectedYear = vm.years.first
-        }
-        if let year = selectedYear {
-            let monthsInYear = vm.months(in: year)
-            if selectedMonthKey == nil || !monthsInYear.contains(where: { $0.key == selectedMonthKey }) {
-                selectedMonthKey = monthsInYear.first?.key
-            }
-        } else {
-            selectedMonthKey = nil
         }
     }
 }
