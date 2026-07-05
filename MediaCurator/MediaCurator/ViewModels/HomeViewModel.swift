@@ -59,7 +59,14 @@ final class HomeViewModel: ObservableObject {
             let monthsOldest = byMonth.keys.sorted()
             let totalMonths  = monthsOldest.count
             let doneCount    = monthsOldest.filter { done.contains($0) }.count
-            let resumeKey    = monthsOldest.first { !done.contains($0) }
+            let oldestUncurated = monthsOldest.first { !done.contains($0) }
+            // Resume target: the last month viewed if it's still visible (exists + not hidden);
+            // otherwise the oldest un-curated month. "Pick up where you left off" (spec §3).
+            let lastViewed   = prefs.getLastViewedMonth()
+            let resumeKey: String? = {
+                if let lv = lastViewed, byMonth[lv] != nil, !done.contains(lv) { return lv }
+                return oldestUncurated
+            }()
             let hiddenItems  = monthsOldest.filter { done.contains($0) }.reduce(0) { $0 + (byMonth[$1] ?? 0) }
 
             // Trash = items staged for deletion (reconciled against the live library).

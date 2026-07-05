@@ -278,6 +278,14 @@ struct GalleryView: View {
             .onChange(of: scrollToMonthKey) { key in
                 if let key { withAnimation { proxy.scrollTo("month-\(key)", anchor: .top) } }
             }
+            .onChange(of: vm.openMonthKey) { key in
+                // Opening a month lands at its top so the walk gate sees the header first
+                // (§3 "Opening a month lands at its top"). Runs after the list relayout.
+                guard let key else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    withAnimation { proxy.scrollTo("month-\(key)", anchor: .top) }
+                }
+            }
             .overlay(alignment: .bottomTrailing) {
                 if showScrollTop && !vm.selectionMode {
                     Button {

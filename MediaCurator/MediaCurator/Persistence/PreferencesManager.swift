@@ -20,6 +20,7 @@ final class PreferencesManager {
         static let lastHiddenMonth      = "last_hidden_month"
         static let scrollHintRetired    = "scroll_hint_retired"
         static let walkedCounts         = "walked_month_counts"
+        static let lastViewedMonth      = "last_viewed_month"
         static let pdfContentSearch     = "pdf_content_search"
         static let photoDupDetection    = "photo_duplicate_detection"
         static let seenOnboarding       = "seen_onboarding"
@@ -62,6 +63,14 @@ final class PreferencesManager {
     func setWalkedCount(month: String, count: Int) {
         var m = getWalkedCounts(); m[month] = count
         defaults.set(m, forKey: Key.walkedCounts)
+    }
+
+    /// The month the user was last viewing in the gallery — the "pick up where you left off"
+    /// resume target (spec §3 Landing position).
+    func getLastViewedMonth() -> String? { defaults.string(forKey: Key.lastViewedMonth) }
+    func setLastViewedMonth(_ key: String?) {
+        if let key { defaults.set(key, forKey: Key.lastViewedMonth) }
+        else { defaults.removeObject(forKey: Key.lastViewedMonth) }
     }
 
     func unmarkMonthDone(year: Int, month: Int) {

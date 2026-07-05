@@ -358,6 +358,7 @@ final class GalleryViewModel: ObservableObject {
             expandedSubGroups.removeAll()
             openMonthKey = key
             walk.opened(key)   // begin a fresh walk (nothing seen yet)
+            prefs.setLastViewedMonth(key)   // "pick up where you left off" resume target
             prefs.saveExpandedSubGroups(expandedSubGroups)
         }
         prefs.saveExpandedMonths(expandedMonths)
