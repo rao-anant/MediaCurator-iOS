@@ -123,7 +123,10 @@ final class GalleryViewModel: ObservableObject {
         self.includeAudio = prefs.isIncludeAudio()
 
         self.expandedYears     = prefs.getExpandedYears()
-        self.expandedMonths    = prefs.getExpandedMonths()
+        // Accordion: at most one open month. Collapse any legacy multi-expanded state.
+        let savedMonths = prefs.getExpandedMonths()
+        self.openMonthKey      = savedMonths.first
+        self.expandedMonths    = savedMonths.isEmpty ? [] : [savedMonths.first!]
         self.expandedSubGroups = prefs.getExpandedSubGroups()
         self.seenSubGroups     = prefs.getSeenSubGroups()
         self.stagedIDs         = prefs.getStagedForDeletion()
@@ -309,9 +312,21 @@ final class GalleryViewModel: ObservableObject {
         loadMedia(forceRefresh: false)
     }
 
+    /// The single month currently open in the accordion (nil = none). Drives the pinned bar.
+    @Published var openMonthKey: String? = nil
+
     func toggleMonthExpansion(_ key: String) {
-        if expandedMonths.contains(key) { expandedMonths.remove(key) }
-        else { expandedMonths.insert(key) }
+        if expandedMonths.contains(key) {
+            expandedMonths.remove(key)
+            openMonthKey = nil
+        } else {
+            // Accordion: only one month open at a time. Opening a month collapses the
+            // previously open month and all sub-group expansions (spec §3).
+            expandedMonths = [key]
+            expandedSubGroups.removeAll()
+            openMonthKey = key
+            prefs.saveExpandedSubGroups(expandedSubGroups)
+        }
         prefs.saveExpandedMonths(expandedMonths)
         structuralVersion += 1
         loadMedia(forceRefresh: false)
