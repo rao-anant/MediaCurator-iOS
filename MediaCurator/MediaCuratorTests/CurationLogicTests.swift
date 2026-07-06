@@ -1,4 +1,5 @@
 import Testing
+import Foundation
 @testable import MediaCurator
 
 /// Ports the Android CurationLogicTest / CURATION_REGRESSION_TESTS.md cases (WL-*, HB-*).
@@ -117,5 +118,38 @@ struct CurationLogicTests {
     @Test func HB_6_retiredTeaserNeverBlocksHide() {
         #expect(HideBarDecision.decide(showHideButton: true, reachedEnd: true,
                                        scrollHintRetired: true, hasReviewHint: false) == .hide)
+    }
+
+    // MARK: - Reset coverage (§4)
+
+    @Test func resetClearsCurationKeysOnly() {
+        let defaults = UserDefaults(suiteName: "reset-test-\(UUID().uuidString)")!
+        let prefs = PreferencesManager(defaults: defaults)
+
+        // Seed curation state (must be cleared) …
+        prefs.markMonthDone(year: 2024, month: 3)
+        prefs.saveSeenSubGroups(["2024-03:cam:image"])
+        prefs.setWalkedCount(month: "2024-03", count: 10)
+        prefs.setScrollHintRetired()
+        prefs.setLastViewedMonth("2024-03")
+        prefs.saveExpandedYears([2024])
+        // … and non-curation state (must survive).
+        prefs.saveSortMode(SortMode.dateNewest)
+        prefs.saveIncludeVideo(false)
+        prefs.setLastDeletedBatch([("id-1", 123)])
+
+        prefs.resetCurationProgress()
+
+        // Cleared:
+        #expect(prefs.getDoneMonths().isEmpty)
+        #expect(prefs.getSeenSubGroups().isEmpty)
+        #expect(prefs.getWalkedCounts().isEmpty)
+        #expect(!prefs.isScrollHintRetired())
+        #expect(prefs.getLastViewedMonth() == nil)
+        #expect(prefs.getExpandedYears().isEmpty)
+        // Preserved:
+        #expect(prefs.getSortMode() == SortMode.dateNewest)
+        #expect(prefs.isIncludeVideo() == false)
+        #expect(prefs.getLastDeletedBatch().count == 1)
     }
 }

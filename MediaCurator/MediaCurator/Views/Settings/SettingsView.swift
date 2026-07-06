@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var importing = false
     @State private var exportURL: URL? = nil
     @State private var toast: String? = nil
+    @State private var showResetConfirm = false
 
     var body: some View {
         Form {
@@ -19,6 +20,12 @@ struct SettingsView: View {
 
             Section {
                 NavigationLink("How It Works") { HelpView() }
+            }
+
+            Section {
+                Button("Reset curation progress", role: .destructive) { showResetConfirm = true }
+            } footer: {
+                Text("Un-hides every month and clears review/scroll progress. Your photos, sort, and filters are untouched.")
             }
 
             if let toast {
@@ -34,6 +41,16 @@ struct SettingsView: View {
         }
         .sheet(item: $exportURL) { url in
             ShareSheet(items: [url])
+        }
+        .confirmationDialog("Reset curation progress?",
+                            isPresented: $showResetConfirm, titleVisibility: .visible) {
+            Button("Reset", role: .destructive) {
+                prefs.resetCurationProgress()
+                show("Curation progress reset — all months are back.")
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Every hidden month reappears and review/scroll progress is cleared. Photos, sort, and filters are not affected.")
         }
     }
 

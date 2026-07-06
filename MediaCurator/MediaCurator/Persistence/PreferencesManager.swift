@@ -21,6 +21,8 @@ final class PreferencesManager {
         static let scrollHintRetired    = "scroll_hint_retired"
         static let walkedCounts         = "walked_month_counts"
         static let lastViewedMonth      = "last_viewed_month"
+        static let hideCoachMarkShown   = "hide_coach_mark_shown"
+        static let demoOptedOut         = "demo_opted_out"
         static let pdfContentSearch     = "pdf_content_search"
         static let photoDupDetection    = "photo_duplicate_detection"
         static let seenOnboarding       = "seen_onboarding"
@@ -206,6 +208,30 @@ final class PreferencesManager {
     }
     func setStagedForDeletion(_ ids: Set<String>) {
         defaults.set(Array(ids), forKey: Key.stagedForDeletion)
+    }
+
+    // MARK: - First-run demo (spec §13)
+
+    func isDemoOptedOut() -> Bool { defaults.bool(forKey: Key.demoOptedOut) }
+    func setDemoOptedOut(_ v: Bool) { defaults.set(v, forKey: Key.demoOptedOut) }
+
+    func wasHideCoachMarkShown() -> Bool { defaults.bool(forKey: Key.hideCoachMarkShown) }
+    func setHideCoachMarkShown() { defaults.set(true, forKey: Key.hideCoachMarkShown) }
+
+    // MARK: - Reset curation progress (spec §4)
+
+    /// Clears exactly the curation keys and nothing else. After this, hidden months reappear
+    /// un-hidden and reviewed/walked months must be reviewed & scrolled again. Deliberately
+    /// does NOT touch: sort mode, media-type filters, PDF/dup toggles, the hidden-restore
+    /// prompt flag, or the last-deleted batch (quick-undo).
+    func resetCurationProgress() {
+        for key in [
+            Key.doneMonths, Key.seenSubGroups, Key.walkedCounts, Key.scrollHintRetired,
+            Key.hideCoachMarkShown, Key.demoOptedOut, Key.lastHiddenMonth, Key.lastViewedMonth,
+            Key.expandedYears, Key.expandedMonths, Key.expandedSubGroups,
+        ] {
+            defaults.removeObject(forKey: key)
+        }
     }
 
     /// "YYYY-MM" key, e.g. "2024-03". Static so MonthGroup can call it without an instance.
