@@ -1,6 +1,5 @@
 import SwiftUI
 import Combine
-import Photos
 
 /// First-run animated explainer of the Review → Hide loop (spec §13).
 /// Auto-plays. On first run it's mandatory-until-opted-out ("Don't show again"); in replay
@@ -77,8 +76,8 @@ struct FirstRunView: View {
             if model.fingerVisible, let rect = frames[model.fingerTargetID] {
                 Image(systemName: "hand.point.up.fill")
                     .font(.system(size: 34))
-                    .foregroundStyle(.primary)
-                    .shadow(radius: 3)
+                    .foregroundStyle(Color(red: 1.0, green: 0.80, blue: 0.0))   // golden yellow
+                    .shadow(color: .black.opacity(0.6), radius: 2)              // stays visible on light + dark
                     .scaleEffect(model.fingerTapping ? 0.7 : 1.0, anchor: .top)
                     .position(x: rect.midX + 10, y: rect.midY + 14)
                     .animation(.easeInOut(duration: 0.45), value: model.fingerTargetID)
@@ -161,19 +160,14 @@ private struct DemoMonthCard: View {
                 LazyVGrid(columns: cols, spacing: 4) {
                     ForEach(Array(month.tiles.enumerated()), id: \.element.id) { i, tile in
                         ZStack {
-                            if let img = tile.image {
-                                Image(uiImage: img).resizable().scaledToFill()
-                            } else {
-                                RoundedRectangle(cornerRadius: 6).fill(tile.color)
-                                Text(tile.emoji).font(.title3)
-                            }
+                            RoundedRectangle(cornerRadius: 6).fill(tile.color)
+                            Text(tile.emoji).font(.title3)
                             if tile.selected {
-                                Rectangle().fill(.red.opacity(0.45))
+                                RoundedRectangle(cornerRadius: 6).fill(.red.opacity(0.45))
                                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.white)
                             }
                         }
                         .aspectRatio(1, contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
                         .demoFrame("tile-\(index)-\(i)")
                     }
                 }
@@ -213,7 +207,6 @@ final class DemoModel: ObservableObject {
         let id = UUID()
         let color: Color
         let emoji: String
-        var image: UIImage? = nil   // real library thumbnail when available
         var selected = false
     }
     struct Month: Identifiable {
@@ -243,59 +236,17 @@ final class DemoModel: ObservableObject {
         Color(red: 0.85, green: 0.45, blue: 0.55), Color(red: 0.36, green: 0.68, blue: 0.67),
         Color(red: 0.86, green: 0.58, blue: 0.30), Color(red: 0.45, green: 0.63, blue: 0.80),
     ]
-    private static let emojis = ["🌅","🐶","🎂","🏖","🐱","🌸","🍕","🚗","🎸","🏔","🐠","🌮"]
+    // Android's TILE_EMOJI set — little pictures so tiles read as varied content. These render
+    // as colour emoji on a real device (they show as tofu only on the simulator's font).
+    private static let emojis = ["🌅","🐶","🎂","🏖️","🐱","🌸","🍕","🚗","🎸",
+                                 "🏔️","🐠","🌮","🎈","🌻","🍎","🐦","🚀","🎨"]
 
     init() {
         months = ["March 2024", "April 2024", "June 2024"].enumerated().map { (mi, label) in
             Month(label: label, tiles: (0..<8).map { i in
                 Tile(color: DemoModel.palette[i % 8],
-                     emoji: DemoModel.emojis[(mi * 3 + i) % DemoModel.emojis.count])
+                     emoji: DemoModel.emojis[(mi * 6 + i) % DemoModel.emojis.count])
             })
-        }
-        loadThumbnails()
-    }
-
-    /// Fill tiles with real library thumbnails so they read as actual photos (emoji don't
-    /// render on the simulator). Falls back to the coloured swatch when no photos/access.
-    /// Retries because the demo can init before Home's photo-auth request resolves (on iOS 26
-    /// `authorizationStatus` reads notDetermined until the first requestAuthorization).
-    private func loadThumbnails(retriesLeft: Int = 8) {
-        var flat: [(Int, Int)] = []
-        for mi in months.indices { for ti in months[mi].tiles.indices { flat.append((mi, ti)) } }
-
-        let opts = PHFetchOptions()
-        opts.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-        opts.fetchLimit = flat.count
-        let assets = PHAsset.fetchAssets(with: .image, options: opts)
-        // Empty usually means photo access hasn't resolved yet (the demo can init before
-        // Home's auth request completes) — retry until assets appear.
-        guard assets.count > 0 else {
-            if retriesLeft > 0 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    self.loadThumbnails(retriesLeft: retriesLeft - 1)
-                }
-            }
-            return
-        }
-
-        let manager = PHImageManager.default()
-        let ro = PHImageRequestOptions()
-        ro.deliveryMode = .opportunistic
-        ro.resizeMode = .fast
-        ro.isNetworkAccessAllowed = true
-
-        assets.enumerateObjects { asset, idx, _ in
-            guard idx < flat.count else { return }
-            let (mi, ti) = flat[idx]
-            manager.requestImage(for: asset, targetSize: CGSize(width: 200, height: 200),
-                                 contentMode: .aspectFill, options: ro) { [weak self] img, _ in
-                guard let self, let img else { return }
-                Task { @MainActor in
-                    if mi < self.months.count, ti < self.months[mi].tiles.count {
-                        self.months[mi].tiles[ti].image = img
-                    }
-                }
-            }
         }
     }
 
