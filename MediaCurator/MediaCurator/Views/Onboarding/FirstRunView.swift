@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import Photos
 
 /// First-run animated explainer of the Review → Hide loop (spec §13).
 /// Auto-plays. On first run it's mandatory-until-opted-out ("Don't show again"); in replay
@@ -10,6 +11,7 @@ struct FirstRunView: View {
 
     @StateObject private var model = DemoModel()
     @State private var dontShowAgain = false
+    @State private var frames: [String: CGRect] = [:]
 
     var body: some View {
         ZStack {
@@ -23,7 +25,6 @@ struct FirstRunView: View {
             }
             .padding()
 
-            // ✕ appears only once finished (or any time in replay mode).
             if replayMode || model.finished {
                 VStack {
                     HStack {
@@ -53,7 +54,6 @@ struct FirstRunView: View {
 
     private var phoneSurface: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Progress + label
             HStack {
                 ProgressView(value: model.progress, total: 100).tint(.accentColor)
                 Text("\(Int(model.progress))% curated")
@@ -64,27 +64,26 @@ struct FirstRunView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .animation(.default, value: model.caption)
 
-            ForEach(model.months) { month in
-                DemoMonthCard(month: month)
+            ForEach(Array(model.months.enumerated()), id: \.element.id) { idx, month in
+                DemoMonthCard(index: idx, month: month)
             }
         }
         .padding()
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18))
+        .coordinateSpace(name: "demo")
+        .onPreferenceChange(DemoFrameKey.self) { frames = $0 }
         .overlay {
-            // Driving finger: positioned by the model, taps in sync with each action.
-            GeometryReader { geo in
-                if model.fingerVisible {
-                    Image(systemName: "hand.point.up.fill")
-                        .font(.system(size: 34))
-                        .foregroundStyle(.primary)
-                        .shadow(radius: 3)
-                        .scaleEffect(model.fingerTapping ? 0.7 : 1.0)
-                        .position(x: geo.size.width * model.fingerAnchor.x,
-                                  y: geo.size.height * model.fingerAnchor.y)
-                        .animation(.easeInOut(duration: 0.5), value: model.fingerAnchor)
-                        .animation(.easeInOut(duration: 0.15), value: model.fingerTapping)
-                        .allowsHitTesting(false)
-                }
+            // Driving finger: sits at the model's current target element and pulses a tap.
+            if model.fingerVisible, let rect = frames[model.fingerTargetID] {
+                Image(systemName: "hand.point.up.fill")
+                    .font(.system(size: 34))
+                    .foregroundStyle(.primary)
+                    .shadow(radius: 3)
+                    .scaleEffect(model.fingerTapping ? 0.7 : 1.0, anchor: .top)
+                    .position(x: rect.midX + 10, y: rect.midY + 14)
+                    .animation(.easeInOut(duration: 0.45), value: model.fingerTargetID)
+                    .animation(.easeInOut(duration: 0.15), value: model.fingerTapping)
+                    .allowsHitTesting(false)
             }
         }
     }
@@ -102,8 +101,7 @@ struct FirstRunView: View {
     private var primaryRow: some View {
         VStack(spacing: 10) {
             if !replayMode {
-                Toggle("Don't show again", isOn: $dontShowAgain)
-                    .font(.subheadline)
+                Toggle("Don't show again", isOn: $dontShowAgain).font(.subheadline)
             }
             Button {
                 onFinish(dontShowAgain)
@@ -117,9 +115,27 @@ struct FirstRunView: View {
     }
 }
 
+// MARK: - Frame reporting (so the finger lands on real elements)
+
+private struct DemoFrameKey: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
+private extension View {
+    func demoFrame(_ id: String) -> some View {
+        background(GeometryReader { g in
+            Color.clear.preference(key: DemoFrameKey.self, value: [id: g.frame(in: .named("demo"))])
+        })
+    }
+}
+
 // MARK: - Month card
 
 private struct DemoMonthCard: View {
+    let index: Int
     let month: DemoModel.Month
     private let cols = Array(repeating: GridItem(.flexible(), spacing: 4), count: 4)
 
@@ -135,27 +151,46 @@ private struct DemoMonthCard: View {
                         .font(.caption2).foregroundStyle(.white)
                         .padding(.horizontal, 8).padding(.vertical, 4)
                         .background(Color.accentColor, in: Capsule())
+                        .demoFrame("pill-\(index)")
                         .transition(.scale.combined(with: .opacity))
                 }
             }
+            .demoFrame("header-\(index)")
+
             if month.isOpen && !month.isHidden {
                 LazyVGrid(columns: cols, spacing: 4) {
-                    ForEach(month.tiles) { tile in
+                    ForEach(Array(month.tiles.enumerated()), id: \.element.id) { i, tile in
                         ZStack {
-                            RoundedRectangle(cornerRadius: 6).fill(tile.color)
-                            Image(systemName: tile.symbol)
-                                .font(.callout)
-                                .foregroundStyle(.white.opacity(0.9))
+                            if let img = tile.image {
+                                Image(uiImage: img).resizable().scaledToFill()
+                            } else {
+                                RoundedRectangle(cornerRadius: 6).fill(tile.color)
+                                Text(tile.emoji).font(.title3)
+                            }
                             if tile.selected {
-                                RoundedRectangle(cornerRadius: 6).fill(.red.opacity(0.45))
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.white)
+                                Rectangle().fill(.red.opacity(0.45))
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(.white)
                             }
                         }
                         .aspectRatio(1, contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .demoFrame("tile-\(index)-\(i)")
                     }
                 }
                 .transition(.opacity)
+
+                if month.anySelected {
+                    HStack {
+                        Spacer()
+                        Label("Delete", systemImage: "trash")
+                            .font(.caption).foregroundStyle(.white)
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(.red, in: Capsule())
+                            .demoFrame("delete-\(index)")
+                        Spacer()
+                    }
+                    .transition(.opacity)
+                }
             }
         }
         .padding(10)
@@ -166,6 +201,7 @@ private struct DemoMonthCard: View {
         .animation(.easeInOut(duration: 0.4), value: month.isOpen)
         .animation(.easeInOut(duration: 0.5), value: month.isHidden)
         .animation(.easeInOut(duration: 0.3), value: month.showPill)
+        .animation(.easeInOut(duration: 0.25), value: month.anySelected)
     }
 }
 
@@ -176,7 +212,8 @@ final class DemoModel: ObservableObject {
     struct Tile: Identifiable {
         let id = UUID()
         let color: Color
-        let symbol: String   // SF Symbol — renders reliably (emoji showed as tofu)
+        let emoji: String
+        var image: UIImage? = nil   // real library thumbnail when available
         var selected = false
     }
     struct Month: Identifiable {
@@ -186,6 +223,7 @@ final class DemoModel: ObservableObject {
         var isOpen = false
         var isHidden = false
         var showPill = false
+        var anySelected: Bool { tiles.contains { $0.selected } }
     }
 
     @Published var months: [Month]
@@ -193,21 +231,71 @@ final class DemoModel: ObservableObject {
     @Published var caption = "Here are your months, waiting to be reviewed."
     @Published var isPlaying = false
     @Published var finished = false
-    /// Finger overlay: normalized position within the phone surface + a tap pulse.
-    @Published var fingerAnchor = CGPoint(x: 0.5, y: 0.5)
+    @Published var fingerTargetID = "header-1"
     @Published var fingerTapping = false
     @Published var fingerVisible = false
 
     private var task: Task<Void, Never>? = nil
-    private static let palette: [Color] = [.blue, .green, .orange, .pink, .purple, .teal, .yellow, .mint]
-    private static let symbols = ["photo.fill", "camera.fill", "heart.fill", "star.fill",
-                                  "sun.max.fill", "leaf.fill", "car.fill", "sparkles"]
+    // Muted-but-distinct colours + Android's little-picture emoji set.
+    private static let palette: [Color] = [
+        Color(red: 0.42, green: 0.60, blue: 0.86), Color(red: 0.50, green: 0.69, blue: 0.36),
+        Color(red: 0.79, green: 0.66, blue: 0.36), Color(red: 0.61, green: 0.54, blue: 0.83),
+        Color(red: 0.85, green: 0.45, blue: 0.55), Color(red: 0.36, green: 0.68, blue: 0.67),
+        Color(red: 0.86, green: 0.58, blue: 0.30), Color(red: 0.45, green: 0.63, blue: 0.80),
+    ]
+    private static let emojis = ["🌅","🐶","🎂","🏖","🐱","🌸","🍕","🚗","🎸","🏔","🐠","🌮"]
 
     init() {
-        months = ["March 2024", "April 2024", "June 2024"].map { label in
+        months = ["March 2024", "April 2024", "June 2024"].enumerated().map { (mi, label) in
             Month(label: label, tiles: (0..<8).map { i in
-                Tile(color: DemoModel.palette[i % 8], symbol: DemoModel.symbols[i % 8])
+                Tile(color: DemoModel.palette[i % 8],
+                     emoji: DemoModel.emojis[(mi * 3 + i) % DemoModel.emojis.count])
             })
+        }
+        loadThumbnails()
+    }
+
+    /// Fill tiles with real library thumbnails so they read as actual photos (emoji don't
+    /// render on the simulator). Falls back to the coloured swatch when no photos/access.
+    /// Retries because the demo can init before Home's photo-auth request resolves (on iOS 26
+    /// `authorizationStatus` reads notDetermined until the first requestAuthorization).
+    private func loadThumbnails(retriesLeft: Int = 8) {
+        var flat: [(Int, Int)] = []
+        for mi in months.indices { for ti in months[mi].tiles.indices { flat.append((mi, ti)) } }
+
+        let opts = PHFetchOptions()
+        opts.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        opts.fetchLimit = flat.count
+        let assets = PHAsset.fetchAssets(with: .image, options: opts)
+        // Empty usually means photo access hasn't resolved yet (the demo can init before
+        // Home's auth request completes) — retry until assets appear.
+        guard assets.count > 0 else {
+            if retriesLeft > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    self.loadThumbnails(retriesLeft: retriesLeft - 1)
+                }
+            }
+            return
+        }
+
+        let manager = PHImageManager.default()
+        let ro = PHImageRequestOptions()
+        ro.deliveryMode = .opportunistic
+        ro.resizeMode = .fast
+        ro.isNetworkAccessAllowed = true
+
+        assets.enumerateObjects { asset, idx, _ in
+            guard idx < flat.count else { return }
+            let (mi, ti) = flat[idx]
+            manager.requestImage(for: asset, targetSize: CGSize(width: 200, height: 200),
+                                 contentMode: .aspectFill, options: ro) { [weak self] img, _ in
+                guard let self, let img else { return }
+                Task { @MainActor in
+                    if mi < self.months.count, ti < self.months[mi].tiles.count {
+                        self.months[mi].tiles[ti].image = img
+                    }
+                }
+            }
         }
     }
 
@@ -237,53 +325,49 @@ final class DemoModel: ObservableObject {
         return !Task.isCancelled
     }
 
-    /// Move the finger to a normalized point and pulse a "tap".
+    /// Move the finger to a named element and pulse a tap.
     @discardableResult
-    private func fingerTap(x: Double, y: Double) async -> Bool {
+    private func fingerTap(_ id: String) async -> Bool {
         fingerVisible = true
-        withAnimation { fingerAnchor = CGPoint(x: x, y: y) }
-        guard await beat(0.45) else { return false }
+        withAnimation { fingerTargetID = id }
+        guard await beat(0.5) else { return false }
         withAnimation { fingerTapping = true }
         guard await beat(0.18) else { return false }
         withAnimation { fingerTapping = false }
-        return true
+        return await beat(0.1)
     }
 
     private func run() async {
-        // Open middle month first, then the ends (never strictly top→bottom).
-        let order = [1, 0, 2]
+        let order = [1, 0, 2]           // middle first, then the ends
         let progresses = [34.0, 67.0, 100.0]
         let captions = [
             "Open one and look through its photos.",
             "Next month — delete the junk… then hide it.",
-            "Last one — same idea.",
+            "…and the last one.",
         ]
         fingerVisible = true
         guard await beat(1.0) else { return }
 
         for (step, idx) in order.enumerated() {
             caption = captions[step]
-            // Tap the month header (approx: upper area) to open it.
-            guard await fingerTap(x: 0.5, y: 0.20) else { return }
+            guard await fingerTap("header-\(idx)") else { return }
             withAnimation { months[idx].isOpen = true }
-            guard await beat(1.2) else { return }
+            guard await beat(1.0) else { return }
 
-            // Select a few tiles (1, 2, 3 across the three months).
             let toSelect = min(step + 1, months[idx].tiles.count)
-            for (n, k) in Array(months[idx].tiles.indices.shuffled().prefix(toSelect)).enumerated() {
-                // Rough grid position for the finger (4 columns, 2 rows) over the tile area.
-                let fx = 0.2 + Double(n % 4) * 0.2
-                guard await fingerTap(x: fx, y: 0.5) else { return }
+            for k in Array(months[idx].tiles.indices.shuffled().prefix(toSelect)) {
+                guard await fingerTap("tile-\(idx)-\(k)") else { return }
                 withAnimation { months[idx].tiles[k].selected = true }
             }
             caption = "Pick the ones you don't want and Delete."
-            guard await fingerTap(x: 0.5, y: 0.82) else { return }   // tap Delete
+            guard await fingerTap("delete-\(idx)") else { return }
             withAnimation { months[idx].tiles.removeAll { $0.selected } }
             guard await beat(0.8) else { return }
 
             withAnimation { months[idx].showPill = true }
             caption = "Then hide the whole month."
-            guard await fingerTap(x: 0.82, y: 0.22) else { return }  // tap Hide month pill
+            guard await beat(0.5) else { return }
+            guard await fingerTap("pill-\(idx)") else { return }
             withAnimation {
                 months[idx].isHidden = true
                 progress = progresses[step]
