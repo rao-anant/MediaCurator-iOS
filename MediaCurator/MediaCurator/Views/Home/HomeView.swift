@@ -7,6 +7,11 @@ struct HomeView: View {
     @StateObject private var vm = HomeViewModel()
     @State private var path = NavigationPath()
     @State private var showingStats = false
+    @State private var showDemo = false
+
+    private let prefs = PreferencesManager()
+    /// The mandatory first-run demo auto-plays once per process (spec §13).
+    private static var demoShownThisProcess = false
 
     private let twoColumns = [GridItem(.flexible(), spacing: 12),
                               GridItem(.flexible(), spacing: 12)]
@@ -69,12 +74,25 @@ struct HomeView: View {
                 }
             }
         }
-        .onAppear { vm.load() }
+        .onAppear {
+            vm.load()
+            // Mandatory first-run demo: once per process, unless opted out (spec §13).
+            if !Self.demoShownThisProcess && !prefs.isDemoOptedOut() {
+                Self.demoShownThisProcess = true
+                showDemo = true
+            }
+        }
         // Reload whenever we return to the root (NavigationStack doesn't reliably re-fire
         // onAppear on pop), so curation progress, hidden count, and trash count refresh
         // after the user hides a month or stages a delete on a pushed screen.
         .onChange(of: path.count) { newCount in
             if newCount == 0 { vm.load() }
+        }
+        .fullScreenCover(isPresented: $showDemo) {
+            FirstRunView(replayMode: false) { optedOut in
+                if optedOut { prefs.setDemoOptedOut(true) }
+                showDemo = false
+            }
         }
     }
 }

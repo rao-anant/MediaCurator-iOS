@@ -22,8 +22,17 @@ struct HelpView: View {
               detail: "Fully offline. No accounts, no ads, no analytics, no network access."),
     ]
 
+    @State private var showDemo = false
+
     var body: some View {
         List {
+            Section {
+                Button {
+                    showDemo = true
+                } label: {
+                    Label("Watch how curating works", systemImage: "play.circle.fill")
+                }
+            }
             ForEach(features) { f in
                 HStack(alignment: .top, spacing: 14) {
                     Image(systemName: f.icon)
@@ -44,6 +53,9 @@ struct HelpView: View {
         }
         .navigationTitle("How It Works")
         .navigationBarTitleDisplayMode(.inline)
+        .fullScreenCover(isPresented: $showDemo) {
+            FirstRunView(replayMode: true) { _ in showDemo = false }
+        }
     }
 
     private var appVersion: String {
