@@ -240,6 +240,28 @@ and **Search** (§7, primarily PDF-text) are **Phase 2** — a later Files-app i
 The PreferencesManager PDF/audio flags and the `.pdf`/`.audio` MediaType cases are kept
 (harmless) so Phase 2 can light them up without a model change.
 
+## Curation overhaul — DONE (2026-07-05, matches Android commit 5c35001)
+
+Implemented the full curation-flow rewrite from the updated `docs/FUNCTIONAL_SPEC.md`
+(§3, §4, §5, §13) and `docs/CURATION_REGRESSION_TESTS.md`:
+- **Pure logic + unit tests** (`Logic/CurationLogic.swift`, `MediaCuratorTests/CurationLogicTests.swift`):
+  `WalkLatch` (WL-1…WL-6), `WalkedMonthRule` (revisit), `HideBarDecision` (HB-1…HB-6),
+  and reset coverage (§4). All pass.
+- **Accordion**: one month open at a time (`openMonthKey`).
+- **Pinned Hide-month bar** (replaces footer button): HIDE / SCROLL_TEASER / REVIEW_HINT /
+  NONE with amber coach hints; walk-gate fed by header/footer onAppear visibility; revisit
+  shortcut + scroll-hint-retired persisted.
+- **Open-month-lands-at-top** + **resume** (last-viewed month → Home resume target).
+- **Hidden = preview-never-unhides** (§5): grid preview while hidden + explicit "Unhide this month".
+- **Reset curation progress** (§4): Settings action, clears only curation keys.
+- **First-run animation** (§13): `Views/Onboarding/FirstRunView.swift`, mandatory once/process
+  with "Don't show again", replayable from Help.
+
+Walk-gate note: the header/footer visibility is fed via SwiftUI `onAppear/onDisappear`; the
+tested `WalkLatch` ordering rule (WL-3b) still holds, but the G-1/G-2/G-3 "settled list"
+guards are approximated (no explicit animation-settle gate yet) — revisit if real-device
+scrolling shows a false latch. Sticky header (§3) still not built.
+
 ## Next steps (in order)
 
 1. Wire up **mark-month-done** round-trip and confirm curation % updates on Home.
