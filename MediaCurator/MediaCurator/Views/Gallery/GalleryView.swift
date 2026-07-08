@@ -278,12 +278,13 @@ struct GalleryView: View {
             .onChange(of: scrollToMonthKey) { key in
                 if let key { withAnimation { proxy.scrollTo("month-\(key)", anchor: .top) } }
             }
-            .onChange(of: vm.openMonthKey) { key in
-                // Opening a month lands at its top so the walk gate sees the header first
-                // (§3 "Opening a month lands at its top"). Runs after the list relayout.
-                guard let key else { return }
+            .onChange(of: vm.scrollRequest) { req in
+                // Opening a year / month / sub-group lands it at the top (§3 Landing, G-5/G-6).
+                // Runs after the list relayout. (No sticky header yet, so anchor .top = offset 0;
+                // revisit the below-sticky-strip offset from G-5 when the sticky header is built.)
+                guard let req else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    withAnimation { proxy.scrollTo("month-\(key)", anchor: .top) }
+                    withAnimation { proxy.scrollTo(req.id, anchor: .top) }
                 }
             }
             .overlay(alignment: .bottomTrailing) {

@@ -23,6 +23,7 @@ final class PreferencesManager {
         static let lastViewedMonth      = "last_viewed_month"
         static let hideCoachMarkShown   = "hide_coach_mark_shown"
         static let demoOptedOut         = "demo_opted_out"
+        static let installInitialized   = "install_initialized"
         static let pdfContentSearch     = "pdf_content_search"
         static let photoDupDetection    = "photo_duplicate_detection"
         static let seenOnboarding       = "seen_onboarding"
@@ -212,8 +213,35 @@ final class PreferencesManager {
 
     // MARK: - First-run demo (spec §13)
 
+    /// Durable cross-reinstall store for the opt-out. On iOS this is iCloud key-value (the
+    /// app's Documents/prefs are wiped on reinstall). Needs the iCloud KV entitlement to
+    /// actually persist; degrades to a no-op (prefs-only) without it.
+    private let cloud = NSUbiquitousKeyValueStore.default
+
     func isDemoOptedOut() -> Bool { defaults.bool(forKey: Key.demoOptedOut) }
-    func setDemoOptedOut(_ v: Bool) { defaults.set(v, forKey: Key.demoOptedOut) }
+
+    /// Opt out of the first-run demo. Writes the per-install prefs flag AND the durable
+    /// iCloud marker so the opt-out survives uninstall/reinstall (FR-2).
+    func setDemoOptedOut(_ v: Bool) {
+        defaults.set(v, forKey: Key.demoOptedOut)
+        if v {
+            cloud.set(true, forKey: Key.demoOptedOut)
+            cloud.synchronize()
+        }
+    }
+
+    /// Call once at launch. On a FRESH install (never initialized), re-apply a durable
+    /// iCloud opt-out so a user who opted out isn't shown the demo again after reinstall
+    /// (FR-2). After a reset (already initialized), the durable marker is NOT re-applied, so
+    /// reset re-enables the demo for the current install (FR-3).
+    func syncDurableDemoOptOut() {
+        guard !defaults.bool(forKey: Key.installInitialized) else { return }
+        cloud.synchronize()
+        if cloud.bool(forKey: Key.demoOptedOut) {
+            defaults.set(true, forKey: Key.demoOptedOut)
+        }
+        defaults.set(true, forKey: Key.installInitialized)
+    }
 
     func wasHideCoachMarkShown() -> Bool { defaults.bool(forKey: Key.hideCoachMarkShown) }
     func setHideCoachMarkShown() { defaults.set(true, forKey: Key.hideCoachMarkShown) }

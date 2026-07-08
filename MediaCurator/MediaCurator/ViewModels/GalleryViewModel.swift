@@ -324,7 +324,10 @@ final class GalleryViewModel: ObservableObject {
 
     func toggleYearExpansion(_ year: Int) {
         if expandedYears.contains(year) { expandedYears.remove(year) }
-        else { expandedYears.insert(year) }
+        else {
+            expandedYears.insert(year)
+            requestScroll(toID: "year-\(year)")   // land the opened year at the very top (§3)
+        }
         prefs.saveExpandedYears(expandedYears)
         structuralVersion += 1
         loadMedia(forceRefresh: false)
@@ -338,6 +341,14 @@ final class GalleryViewModel: ObservableObject {
     @Published var hideBarState: HideBarState = .none
     @Published var hideBarMonthLabel = ""
     @Published var hideBarHintText = ""
+
+    /// A request to scroll a just-expanded row to the top (spec §3 Landing / G-5, G-6).
+    /// The token makes re-expanding the same row retrigger the onChange.
+    struct ScrollRequest: Equatable { let id: String; let token: UUID }
+    @Published var scrollRequest: ScrollRequest? = nil
+    private func requestScroll(toID id: String) {
+        scrollRequest = ScrollRequest(id: id, token: UUID())
+    }
 
     private var walk = WalkLatch()
     private var scrollHintRetired = false
@@ -360,6 +371,7 @@ final class GalleryViewModel: ObservableObject {
             walk.opened(key)   // begin a fresh walk (nothing seen yet)
             prefs.setLastViewedMonth(key)   // "pick up where you left off" resume target
             prefs.saveExpandedSubGroups(expandedSubGroups)
+            requestScroll(toID: "month-\(key)")   // land the opened month at the top (§3)
         }
         prefs.saveExpandedMonths(expandedMonths)
         structuralVersion += 1
@@ -468,6 +480,11 @@ final class GalleryViewModel: ObservableObject {
                 changed = true
             }
             if changed { prefs.saveSeenSubGroups(seenSubGroups) }
+            // G-6: opening a sub-group scrolls its PARENT MONTH to the top, so the sibling
+            // (unopened) sub-group line stays visible under the month header. Key is
+            // "<month>:<sub>" → parent month is the part before ":".
+            let parentMonth = String(key.prefix(while: { $0 != ":" }))
+            requestScroll(toID: "month-\(parentMonth)")
         }
         prefs.saveExpandedSubGroups(expandedSubGroups)
         structuralVersion += 1
