@@ -6,6 +6,7 @@ struct PlaceBrowseView: View {
     let mode: PlaceBrowseViewModel.Mode
     @StateObject private var vm: PlaceBrowseViewModel
     @State private var selectedItem: MediaItem? = nil
+    @Environment(\.dismiss) private var dismiss
 
     init(mode: PlaceBrowseViewModel.Mode) {
         self.mode = mode
@@ -38,6 +39,16 @@ struct PlaceBrowseView: View {
         }
         .navigationTitle(mode == .cities ? "Browse by location" : "By location")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                // ‹ walks up one drill level (photos → city → state → country), exiting to Home
+                // only at the top. iOS has no system Back key, so this mirrors Android's Back.
+                Button { if !vm.goUp() { dismiss() } } label: {
+                    Image(systemName: "chevron.left")
+                }
+            }
+        }
         .searchable(text: $vm.query, placement: .navigationBarDrawer(displayMode: .always),
                     prompt: "Search a city, state, or country")
         .onAppear { vm.load() }
@@ -60,7 +71,7 @@ struct PlaceBrowseView: View {
             HStack(spacing: 4) {
                 ForEach(Array(vm.breadcrumb.enumerated()), id: \.offset) { i, seg in
                     if i > 0 { Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.secondary) }
-                    Button(seg) { vm.popTo(depth: i) }
+                    Button(seg) { vm.tapBreadcrumb(i) }
                         .font(.subheadline).foregroundStyle(Color.accentColor)
                 }
             }

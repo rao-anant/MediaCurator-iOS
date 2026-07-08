@@ -106,12 +106,27 @@ final class PlaceBrowseViewModel: ObservableObject {
         return segs
     }
 
-    func popTo(depth: Int) {
-        // depth 0 = country list, 1 = state list, 2 = city list.
-        selectedCity = nil
-        if depth <= 0 { country = nil; state = nil }
-        else if depth == 1 { state = nil }
+    /// Tap a breadcrumb segment → show THAT segment's children (keep the clicked level).
+    /// Breadcrumb is [country, (state if any), (city if selected)].
+    func tapBreadcrumb(_ index: Int) {
+        let hasState = !(state ?? "").isEmpty
+        if index == 0 {
+            state = nil            // country segment → its states (or cities)
+        } else if hasState && index == 1 {
+            // state segment → its cities (keep state; rebuild clears the selected city)
+        } else {
+            return                 // city segment → already showing its photos
+        }
         rebuild()
+    }
+
+    /// Walk up one drill level (for the ‹ back button — iOS has no system Back key).
+    /// Returns false when already at the top, so the caller dismisses to Home.
+    func goUp() -> Bool {
+        if selectedCity != nil { rebuild(); return true }   // photos → the city list
+        if !(state ?? "").isEmpty { state = nil; rebuild(); return true } // cities → states
+        if country != nil { country = nil; rebuild(); return true }      // states → countries
+        return false
     }
 
     // MARK: - Build current list

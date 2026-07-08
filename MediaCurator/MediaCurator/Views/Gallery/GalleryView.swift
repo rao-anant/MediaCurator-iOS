@@ -13,10 +13,8 @@ struct GalleryView: View {
     @State private var showingStats = false
     @State private var filterToast: String? = nil
     @State private var showScrollTop = false
-    @State private var headerVisibleMonth: String? = nil
-    @State private var footerVisibleMonth: String? = nil
-    @State private var hintBob = false
     @State private var headerPositions: [String: CGFloat] = [:]
+    @State private var viewportHeight: CGFloat = 0
 
     /// Sticky context (spec §3): the year always, the month when scrolled into one. Derived from
     /// the closest header that has scrolled to/above the top. Hidden in flat size-sort mode.
@@ -347,7 +345,20 @@ struct GalleryView: View {
                 // offset goes negative as content scrolls up; show FAB past ~3 rows.
                 showScrollTop = offset < -400
             }
-            .onPreferenceChange(HeaderPosKey.self) { headerPositions = $0 }
+            .onPreferenceChange(HeaderPosKey.self) { pos in
+                headerPositions = pos
+                // Continuous walk-gate evaluation from real positions (robust at the true bottom).
+                guard let open = vm.openMonthKey, viewportHeight > 0 else { return }
+                let headerY = pos.first { $0.key.hasPrefix("M:\(open)|") }?.value
+                let footerY = pos["F:\(open)"]
+                let headerVisible = (headerY ?? .greatestFiniteMagnitude) <= 8   // header reached the top
+                let footerVisible = footerY.map { $0 > 0 && $0 < viewportHeight } ?? false
+                vm.evaluateWalk(headerVisible: headerVisible, footerVisible: footerVisible)
+            }
+            .background(GeometryReader { g in
+                Color.clear.onAppear { viewportHeight = g.size.height }
+                                     .onChange(of: g.size.height) { viewportHeight = $0 }
+            })
             .overlay(alignment: .top) { stickyHeader }
             .refreshable { vm.loadMedia(forceRefresh: true) }
             .onChange(of: scrollToMonthKey) { key in
@@ -430,27 +441,20 @@ struct GalleryView: View {
                     Color.clear.preference(key: HeaderPosKey.self,
                                            value: ["M:\(h.monthKey)|\(h.label)": g.frame(in: .named("galleryScroll")).minY])
                 })
-                .onAppear { if h.monthKey == vm.openMonthKey { headerVisibleMonth = h.monthKey; pushWalk() } }
-                .onDisappear { if headerVisibleMonth == h.monthKey { headerVisibleMonth = nil; pushWalk() } }
         case .subHeader(let s):
             SubHeaderRow(sub: s) { vm.toggleSubGroupExpansion(s.subKey) }
         case .footer(let f):
-            // Thin divider + the open month's bottom anchor for the walk gate. Visibility of
-            // this row (and the month header) drives WalkLatch via evaluateWalk.
+            // Thin divider + the open month's bottom anchor for the walk gate. Its position is
+            // reported continuously (below) so reaching the true bottom registers reliably.
             Divider()
                 .padding(.vertical, 6)
-                .onAppear { footerVisibleMonth = f.monthKey; pushWalk() }
-                .onDisappear { if footerVisibleMonth == f.monthKey { footerVisibleMonth = nil; pushWalk() } }
+                .background(GeometryReader { g in
+                    Color.clear.preference(key: HeaderPosKey.self,
+                                           value: ["F:\(f.monthKey)": g.frame(in: .named("galleryScroll")).minY])
+                })
         case .media:
             EmptyView()   // media is rendered via grid blocks, never here
         }
-    }
-
-    /// Feed the open month's header/footer visibility into the walk gate.
-    private func pushWalk() {
-        guard let open = vm.openMonthKey else { return }
-        vm.evaluateWalk(headerVisible: headerVisibleMonth == open,
-                        footerVisible: footerVisibleMonth == open)
     }
 
     // MARK: - Permission denied
