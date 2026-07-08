@@ -150,6 +150,10 @@ final class GalleryViewModel: ObservableObject {
         }
     }
 
+    /// Seed the viewer's flat list from an external screen (e.g. Place browse) so it can page a
+    /// plain item list without the full gallery tree.
+    func seedViewer(items: [MediaItem]) { flatMediaItems = items }
+
     // MARK: - Authorization
 
     func requestAuthorization() async {

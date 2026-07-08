@@ -10,9 +10,20 @@ struct SettingsView: View {
     @State private var exportURL: URL? = nil
     @State private var toast: String? = nil
     @State private var showResetConfirm = false
+    @State private var placeSearch = true
 
     var body: some View {
         Form {
+            Section {
+                Toggle("Search & browse by location", isOn: $placeSearch)
+                    .onChange(of: placeSearch) { on in
+                        prefs.setPlaceSearchEnabled(on)
+                        if !on { Task { await PlaceStore.shared.clear() } }   // clears the local place cache
+                    }
+            } footer: {
+                Text("Finds the city each photo was taken in, fully offline. Turning it off clears the local place cache. Place data © GeoNames (CC BY 4.0).")
+            }
+
             Section("Hidden months") {
                 Button("Export hidden months") { exportHiddenMonths() }
                 Button("Import hidden months") { importing = true }
@@ -34,6 +45,7 @@ struct SettingsView: View {
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { placeSearch = prefs.isPlaceSearchEnabled() }
         .fileImporter(isPresented: $importing,
                       allowedContentTypes: [.json],
                       allowsMultipleSelection: false) { result in

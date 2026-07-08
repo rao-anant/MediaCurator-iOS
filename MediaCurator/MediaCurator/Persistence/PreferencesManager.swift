@@ -26,6 +26,7 @@ final class PreferencesManager {
         static let installInitialized   = "install_initialized"
         static let pdfContentSearch     = "pdf_content_search"
         static let photoDupDetection    = "photo_duplicate_detection"
+        static let placeSearch          = "place_search"
         static let seenOnboarding       = "seen_onboarding"
         static let lastBatch            = "last_deleted_batch"
         static let hiddenRestoreOffered = "hidden_restore_offered"
@@ -166,6 +167,10 @@ final class PreferencesManager {
         defaults.object(forKey: Key.photoDupDetection) as? Bool ?? true
     }
     func setPhotoDuplicateDetectionEnabled(_ v: Bool) { defaults.set(v, forKey: Key.photoDupDetection) }
+
+    /// Place search (offline reverse-geocoding, spec §7) — default ON.
+    func isPlaceSearchEnabled() -> Bool { defaults.object(forKey: Key.placeSearch) as? Bool ?? true }
+    func setPlaceSearchEnabled(_ v: Bool) { defaults.set(v, forKey: Key.placeSearch) }
 
     func hasSeenOnboarding() -> Bool { defaults.bool(forKey: Key.seenOnboarding) }
     func setSeenOnboarding()         { defaults.set(true, forKey: Key.seenOnboarding) }

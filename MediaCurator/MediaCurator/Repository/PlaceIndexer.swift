@@ -26,7 +26,7 @@ actor PlaceIndexer {
     /// Index any not-yet-scanned photos. `progress` is called on the main actor with (done, total).
     /// Returns the number of located photos after the run.
     @discardableResult
-    func index(_ items: [MediaItem], progress: @Sendable @escaping (Int, Int) -> Void) async -> Int {
+    func index(_ items: [MediaItem], progress: @MainActor @Sendable @escaping (Int, Int) -> Void) async -> Int {
         guard !indexing else { return await PlaceStore.shared.locatedCount() }
         indexing = true
         defer { indexing = false }

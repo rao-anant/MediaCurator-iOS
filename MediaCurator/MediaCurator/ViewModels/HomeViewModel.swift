@@ -17,6 +17,7 @@ struct HomeState {
     let hiddenSub: String
     let trashSub: String
     let trashEmpty: Bool
+    var placeCount: Int = 0
 }
 
 @MainActor
@@ -75,7 +76,10 @@ final class HomeViewModel: ObservableObject {
             let trashItems   = media.filter { staged.contains($0.id) }
             let trashBytes   = trashItems.reduce(0) { $0 + $1.size }
 
-            state = buildState(
+            await PlaceStore.shared.ensureLoaded()
+            let placeCount = await PlaceStore.shared.locatedCount()
+
+            var built = buildState(
                 total: media.count,
                 size: totalSize,
                 hidden: hiddenItems,
@@ -85,6 +89,19 @@ final class HomeViewModel: ObservableObject {
                 trashCount: trashItems.count,
                 trashBytes: trashBytes
             )
+            built.placeCount = placeCount
+            state = built
+
+            // Kick place indexing in the background (offline reverse-geocoding, spec §7) so the
+            // location cards light up. Refresh the count when it finishes.
+            if prefs.isPlaceSearchEnabled() {
+                Task.detached(priority: .background) {
+                    let n = await PlaceIndexer.shared.index(media) { _, _ in }
+                    await MainActor.run {
+                        if var s = self.state { s.placeCount = n; self.state = s }
+                    }
+                }
+            }
         }
     }
 

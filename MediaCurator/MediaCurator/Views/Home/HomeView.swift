@@ -16,6 +16,12 @@ struct HomeView: View {
     private let twoColumns = [GridItem(.flexible(), spacing: 12),
                               GridItem(.flexible(), spacing: 12)]
 
+    private var placeReady: Bool { (vm.state?.placeCount ?? 0) > 0 }
+    private var placeSub: String {
+        let n = vm.state?.placeCount ?? 0
+        return n == 0 ? "Scanning photos…" : "\(Formatters.countShort(n)) located"
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
@@ -33,6 +39,15 @@ struct HomeView: View {
                             }
                             GridCard(title: "Find duplicates", subtitle: state.dupSub, icon: "doc.on.doc") {
                                 path.append(NavDestination.duplicates)
+                            }
+                            // Place browse (spec §7) — dimmed/disabled until ≥1 place is indexed.
+                            GridCard(title: "Browse by location", subtitle: placeSub, icon: "map",
+                                     disabled: !placeReady) {
+                                path.append(NavDestination.placeCities)
+                            }
+                            GridCard(title: "Drill by location", subtitle: "Country › State › City", icon: "globe",
+                                     disabled: !placeReady) {
+                                path.append(NavDestination.placeDrill)
                             }
                             GridCard(title: "Hidden months", subtitle: state.hiddenSub, icon: "eye.slash") {
                                 path.append(NavDestination.hidden)
@@ -71,6 +86,8 @@ struct HomeView: View {
                 case .hidden:            HiddenView()
                 case .trash:             TrashView()
                 case .settings:          SettingsView()
+                case .placeCities:       PlaceBrowseView(mode: .cities)
+                case .placeDrill:        PlaceBrowseView(mode: .drill)
                 }
             }
         }
@@ -105,6 +122,8 @@ enum NavDestination: Hashable {
     case hidden
     case trash
     case settings
+    case placeCities
+    case placeDrill
 }
 
 // MARK: - Sub-views
@@ -154,6 +173,7 @@ private struct GridCard: View {
     let title: String
     let subtitle: String
     let icon: String
+    var disabled: Bool = false
     let onTap: () -> Void
 
     var body: some View {
@@ -173,6 +193,8 @@ private struct GridCard: View {
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.5 : 1)
     }
 }
 

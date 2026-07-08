@@ -52,6 +52,16 @@ actor PlaceStore {
         }
     }
 
+    /// localIdentifier → its `PlaceRecord` (located photos only) — for filtering photos by place.
+    func placeByID(validIDs: Set<String>? = nil) -> [String: PlaceRecord] {
+        var out: [String: PlaceRecord] = [:]
+        for (id, entry) in cache where !entry.value.isEmpty {
+            if let validIDs, !validIDs.contains(id) { continue }
+            if let rec = Self.decode(entry.value) { out[id] = rec }
+        }
+        return out
+    }
+
     /// localIdentifier → search tokens (city, aliases, state, country); located photos only.
     func searchIndex() -> [String: [String]] {
         var out: [String: [String]] = [:]
