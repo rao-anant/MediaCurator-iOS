@@ -230,11 +230,26 @@ struct GalleryView: View {
 
     private let gridColumns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 4)
 
+    /// Centered empty-state message when the gallery has no rows (spec §3).
+    private var galleryEmptyMessage: String? {
+        let s = vm.mediaStats
+        let total = s.totalPhotos + s.totalVideos + s.totalPdfs + s.totalAudios
+        if total == 0 { return "No media found on this device." }
+        let visible = s.visiblePhotos + s.visibleVideos + s.visiblePdfs + s.visibleAudios
+        if visible == 0 { return "All months are hidden! Use ‘Hidden months’ on the Home screen to bring them back." }
+        return "No items match the current filter. Tap the chips above to show more types."
+    }
+
     private var galleryContent: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 if vm.isLoading && vm.galleryItems.isEmpty {
                     ProgressView("Scanning library…").padding(.top, 40)
+                } else if vm.galleryItems.isEmpty, let msg = galleryEmptyMessage {
+                    Text(msg)
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40).padding(.top, 80)
                 }
                 // Top anchor + scroll-offset probe for the scroll-to-top FAB.
                 Color.clear.frame(height: 0).id("gallery-top")

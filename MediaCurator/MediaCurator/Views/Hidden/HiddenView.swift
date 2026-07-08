@@ -10,6 +10,7 @@ struct HiddenView: View {
     @State private var selectedYear: Int? = nil
     @State private var selectedMonthKey: String? = nil
     @State private var didAutoPreview = false
+    @State private var viewerItem: MediaItem? = nil
 
     private let gridColumns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 3)
 
@@ -41,10 +42,15 @@ struct HiddenView: View {
                         ForEach(vm.items(forMonth: key)) { item in
                             MediaThumbnailView(cell: .init(mediaItem: item, monthKey: key,
                                                            indexInMonth: 0, dateLabel: nil,
-                                                           structuralVersion: 0)) {}
+                                                           structuralVersion: 0)) {
+                                viewerItem = item
+                            }
                         }
                     }
                     .padding(.horizontal, 2)
+                }
+                .fullScreenCover(item: $viewerItem) { item in
+                    SimpleMediaViewer(items: vm.items(forMonth: key), startingID: item.id)
                 }
             } else {
                 Spacer()

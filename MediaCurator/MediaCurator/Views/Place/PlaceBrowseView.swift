@@ -42,7 +42,7 @@ struct PlaceBrowseView: View {
                     prompt: "Search a city, state, or country")
         .onAppear { vm.load() }
         .fullScreenCover(item: $selectedItem) { item in
-            PlaceViewerWrapper(items: vm.searching ? vm.searchPhotos : vm.photos, startingID: item.id)
+            SimpleMediaViewer(items: vm.searching ? vm.searchPhotos : vm.photos, startingID: item.id)
         }
     }
 
@@ -131,15 +131,3 @@ struct PlaceBrowseView: View {
     }
 }
 
-/// Small wrapper so the place viewer can page a plain item list without the gallery VM.
-private struct PlaceViewerWrapper: View {
-    let items: [MediaItem]
-    let startingID: String
-    @StateObject private var vm = GalleryViewModel()
-
-    var body: some View {
-        // Reuse the gallery viewer by seeding a throwaway VM's flat list.
-        MediaViewerView(vm: vm, startingID: startingID)
-            .onAppear { vm.seedViewer(items: items) }
-    }
-}

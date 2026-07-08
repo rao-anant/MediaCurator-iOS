@@ -30,9 +30,15 @@ struct MediaViewerView: View {
 
             TabView(selection: $currentID) {
                 ForEach(items) { item in
-                    PhotoZoomView(localIdentifier: item.localIdentifier)
-                        .tag(item.id)
-                        .onTapGesture { withAnimation { showControls.toggle() } }
+                    Group {
+                        if item.type == .video {
+                            VideoPlayerPage(localIdentifier: item.localIdentifier, isCurrent: item.id == currentID)
+                        } else {
+                            PhotoZoomView(localIdentifier: item.localIdentifier)
+                        }
+                    }
+                    .tag(item.id)
+                    .onTapGesture { withAnimation { showControls.toggle() } }
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
