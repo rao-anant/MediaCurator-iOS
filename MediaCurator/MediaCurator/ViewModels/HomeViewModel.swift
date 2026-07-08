@@ -131,7 +131,7 @@ final class HomeViewModel: ObservableObject {
         switch true {
         case total == 0:
             title = "No media yet"; progress = -1; progressLabel = ""
-            caption = ""; resumeLabel = "Add photos to get started"; button = "Open gallery"
+            caption = ""; resumeLabel = "Add photos to get started"; button = "Browse photos"
         case doneMonths == 0:
             title = "Start curating"; progress = -1; progressLabel = ""
             caption = "Begin at"; button = "Start"

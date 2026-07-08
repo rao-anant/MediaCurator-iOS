@@ -86,7 +86,7 @@ struct TrashView: View {
         VStack(spacing: 12) {
             Image(systemName: "trash").font(.system(size: 52)).foregroundStyle(.secondary)
             Text("Trash is Empty").font(.title3).bold()
-            Text("Photos you delete in the gallery are staged here for review before they're removed from your iPhone.")
+            Text("Photos you delete in this app are staged here for review before they're removed from your iPhone.")
                 .multilineTextAlignment(.center)
                 .font(.subheadline).foregroundStyle(.secondary)
         }
