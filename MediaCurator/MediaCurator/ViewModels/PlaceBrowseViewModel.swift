@@ -19,13 +19,26 @@ final class PlaceBrowseViewModel: ObservableObject {
 
     @Published private(set) var list: [PlaceCount] = []
     @Published private(set) var photos: [MediaItem] = []
+    /// Free-text place query (city / alias / state / country), diacritic-normalized.
+    @Published var query = ""
 
     let mode: Mode
     private let repo = MediaRepository()
     private let prefs = PreferencesManager()
     private var records: [PlaceRecord] = []
     private var placeByID: [String: PlaceRecord] = [:]
+    private var searchTokens: [String: [String]] = [:]
     private var media: [MediaItem] = []
+
+    var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    /// Photos whose place tokens (city, aliases, state, country) match the query.
+    var searchPhotos: [MediaItem] {
+        media.filter { m in
+            guard let toks = searchTokens[m.id] else { return false }
+            return PlaceSearch.matchesAny(query: query, tokens: toks)
+        }.sorted { $0.dateTaken > $1.dateTaken }
+    }
 
     init(mode: Mode) { self.mode = mode }
 
@@ -42,6 +55,7 @@ final class PlaceBrowseViewModel: ObservableObject {
             await PlaceStore.shared.ensureLoaded()
             records = await PlaceStore.shared.records(validIDs: liveIDs)
             placeByID = await PlaceStore.shared.placeByID(validIDs: liveIDs)
+            searchTokens = await PlaceStore.shared.searchIndex()
             rebuild()
         }
     }

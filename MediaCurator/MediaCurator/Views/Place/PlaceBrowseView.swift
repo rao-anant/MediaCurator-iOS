@@ -26,8 +26,10 @@ struct PlaceBrowseView: View {
                 .padding(.horizontal)
             }
 
-            if vm.selectedCity != nil {
-                photoGrid
+            if vm.searching {
+                searchResults
+            } else if vm.selectedCity != nil {
+                photoGrid(vm.photos)
             } else if vm.list.isEmpty {
                 emptyState
             } else {
@@ -36,9 +38,11 @@ struct PlaceBrowseView: View {
         }
         .navigationTitle(mode == .cities ? "Browse by location" : "By location")
         .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $vm.query, placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: "Search a city, state, or country")
         .onAppear { vm.load() }
         .fullScreenCover(item: $selectedItem) { item in
-            PlaceViewerWrapper(items: vm.photos, startingID: item.id)
+            PlaceViewerWrapper(items: vm.searching ? vm.searchPhotos : vm.photos, startingID: item.id)
         }
     }
 
@@ -85,10 +89,10 @@ struct PlaceBrowseView: View {
         .listStyle(.plain)
     }
 
-    private var photoGrid: some View {
+    private func photoGrid(_ items: [MediaItem]) -> some View {
         ScrollView {
             LazyVGrid(columns: photoCols, spacing: 2) {
-                ForEach(vm.photos) { item in
+                ForEach(items) { item in
                     MediaThumbnailView(cell: .init(mediaItem: item, monthKey: "", indexInMonth: 0,
                                                    dateLabel: nil, structuralVersion: 0)) {
                         selectedItem = item
@@ -96,6 +100,21 @@ struct PlaceBrowseView: View {
                 }
             }
             .padding(.horizontal, 2)
+        }
+    }
+
+    @ViewBuilder
+    private var searchResults: some View {
+        let results = vm.searchPhotos
+        if results.isEmpty {
+            VStack(spacing: 10) {
+                Spacer()
+                Image(systemName: "magnifyingglass").font(.title).foregroundStyle(.secondary)
+                Text("No photos match “\(vm.query)”").font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+            }
+        } else {
+            photoGrid(results)
         }
     }
 
