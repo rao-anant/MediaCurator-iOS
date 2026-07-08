@@ -16,6 +16,22 @@ struct GalleryView: View {
     @State private var headerVisibleMonth: String? = nil
     @State private var footerVisibleMonth: String? = nil
     @State private var hintBob = false
+    @State private var headerPositions: [String: CGFloat] = [:]
+
+    /// Sticky context (spec §3): the year always, the month when scrolled into one. Derived from
+    /// the closest header that has scrolled to/above the top. Hidden in flat size-sort mode.
+    private var stickyYear: String? {
+        guard vm.sortMode != .sizeAbsolute else { return nil }
+        let ys = headerPositions.filter { $0.key.hasPrefix("Y:") && $0.value <= 0 }
+        guard let top = ys.max(by: { $0.value < $1.value }) else { return nil }
+        return String(top.key.dropFirst(2))
+    }
+    private var stickyMonthLabel: String? {
+        guard vm.sortMode != .sizeAbsolute, let year = stickyYear else { return nil }
+        let ms = headerPositions.filter { $0.key.hasPrefix("M:\(year)-") && $0.value <= 0 }
+        guard let top = ms.max(by: { $0.value < $1.value }) else { return nil }
+        return top.key.split(separator: "|").last.map(String.init)
+    }
 
     private func showFilterToast(_ message: String) {
         filterToast = message
@@ -85,6 +101,11 @@ struct GalleryView: View {
                     Button { showingStats = true } label: { Image(systemName: "info.circle") }
                 }
             }
+            if !vm.selectionMode {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { vm.loadMedia(forceRefresh: true) } label: { Image(systemName: "arrow.clockwise") }
+                }
+            }
         }
         .sheet(isPresented: $showingStats) { StatsView() }
         .onAppear {
@@ -96,6 +117,43 @@ struct GalleryView: View {
         }
         .fullScreenCover(item: $selectedItem) { item in
             MediaViewerView(vm: vm, startingID: item.id)
+        }
+    }
+
+    // MARK: - Sticky header (spec §3)
+
+    @ViewBuilder
+    private var stickyHeader: some View {
+        if let year = stickyYear, !vm.selectionMode {
+            VStack(spacing: 0) {
+                Button {
+                    if let y = Int(year) { vm.toggleYearExpansion(y) }
+                } label: {
+                    HStack {
+                        Text(year).font(.subheadline).bold()
+                        Spacer()
+                        Image(systemName: "chevron.up").font(.caption2).foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 6)
+                    .background(Color(.systemBackground).opacity(0.96))
+                }
+                .buttonStyle(.plain)
+                if let month = stickyMonthLabel {
+                    Button {
+                        // Collapse the open month if this sticky month is it.
+                        if let key = vm.openMonthKey { vm.toggleMonthExpansion(key) }
+                    } label: {
+                        HStack {
+                            Text(month).font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 4)
+                        .background(Color(.systemBackground).opacity(0.96))
+                    }
+                    .buttonStyle(.plain)
+                }
+                Divider()
+            }
         }
     }
 
@@ -289,6 +347,8 @@ struct GalleryView: View {
                 // offset goes negative as content scrolls up; show FAB past ~3 rows.
                 showScrollTop = offset < -400
             }
+            .onPreferenceChange(HeaderPosKey.self) { headerPositions = $0 }
+            .overlay(alignment: .top) { stickyHeader }
             .refreshable { vm.loadMedia(forceRefresh: true) }
             .onChange(of: scrollToMonthKey) { key in
                 if let key { withAnimation { proxy.scrollTo("month-\(key)", anchor: .top) } }
@@ -360,8 +420,16 @@ struct GalleryView: View {
         switch item {
         case .yearHeader(let y):
             YearHeaderRow(header: y) { vm.toggleYearExpansion(y.year) }
+                .background(GeometryReader { g in
+                    Color.clear.preference(key: HeaderPosKey.self,
+                                           value: ["Y:\(y.year)": g.frame(in: .named("galleryScroll")).minY])
+                })
         case .header(let h):
             MonthHeaderRow(header: h, onTap: { vm.toggleMonthExpansion(h.monthKey) })
+                .background(GeometryReader { g in
+                    Color.clear.preference(key: HeaderPosKey.self,
+                                           value: ["M:\(h.monthKey)|\(h.label)": g.frame(in: .named("galleryScroll")).minY])
+                })
                 .onAppear { if h.monthKey == vm.openMonthKey { headerVisibleMonth = h.monthKey; pushWalk() } }
                 .onDisappear { if headerVisibleMonth == h.monthKey { headerVisibleMonth = nil; pushWalk() } }
         case .subHeader(let s):
@@ -428,4 +496,13 @@ extension SortMode {
 private struct ScrollOffsetKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+// MARK: - Sticky header position tracking
+
+private struct HeaderPosKey: PreferenceKey {
+    static var defaultValue: [String: CGFloat] = [:]
+    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
+        value.merge(nextValue()) { _, new in new }
+    }
 }

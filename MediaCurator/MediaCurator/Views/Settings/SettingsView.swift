@@ -34,6 +34,12 @@ struct SettingsView: View {
             }
 
             Section {
+                Button("Share diagnostics") { shareDiagnostics() }
+            } footer: {
+                Text("Device and app info to help with support. No photos or file names are included.")
+            }
+
+            Section {
                 Button("Reset curation progress", role: .destructive) { showResetConfirm = true }
             } footer: {
                 Text("Un-hides every month and clears review/scroll progress. Your photos, sort, and filters are untouched.")
@@ -96,6 +102,22 @@ struct SettingsView: View {
         prefs.setDoneMonths(merged)
         let added = merged.count - before.count
         show("Import done — \(added) new months added (\(merged.count) total hidden)")
+    }
+
+    /// Assemble device + app info (no photos, no file names) and share it (spec §10).
+    private func shareDiagnostics() {
+        let dev = UIDevice.current
+        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        let lines = [
+            "MediaCurator diagnostics",
+            "App: \(v) (\(b))",
+            "iOS: \(dev.systemVersion)  ·  Model: \(dev.model)",
+            "Hidden months: \(prefs.getDoneMonths().count)",
+            "Place search: \(prefs.isPlaceSearchEnabled() ? "on" : "off")",
+            "(No photos or file names are included.)",
+        ]
+        presentShareSheet(items: [lines.joined(separator: "\n")])
     }
 
     private func show(_ msg: String) {
