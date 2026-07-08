@@ -281,6 +281,32 @@ Ported the offline reverse-geocoding "search & browse by place" feature:
 - Selection actions on place results (long-press multi-select → Share/Delete unified action bar).
 - Reinstall-safe place-index backup (Android=Downloads; iOS→iCloud/Documents; deferred).
 
+## Cross-the-board gap audit (2026-07-08) — spec §0–§13
+
+Full section-by-section audit; every implementable gap closed. Remaining items are
+**intentional iOS divergences** (platform limits or the Option-A scope decision), not gaps.
+
+**Closed this pass:** viewer video playback (AVPlayer); Hidden tap→viewer + selection actions;
+Place browse/search selection actions (shared `SelectablePhotoGrid`); gallery empty states;
+sticky scroll header (year always, month when scrolled in); gallery Refresh toolbar; Settings
+Share diagnostics; "this app" wording pass. (Earlier: full curation overhaul, place search,
+Stats, Duplicates, Settings export/import, Help, first-run demo.)
+
+**Intentional divergences (NOT gaps):**
+- General Search (filename + PDF text) and PDF/audio media types — Phase 2 (Option A, §12).
+  Place search (photo GPS) IS shipped.
+- Viewer **Rename** — no PHAsset filename API on iOS.
+- **Show in Photos / Open in gallery** — iOS can't deep-link to a specific asset.
+- Selection **Move / Switch Album** — iOS albums are additive; you can't "move out of" the
+  library the way MediaStore allows. (Could add "Add to album" later.)
+- Cross-reinstall **Downloads backups** (hidden-months, place-index, lifetime "cleaned up",
+  "Restore your progress?" offer) — Android-specific; iOS maps to iCloud/Documents; deferred.
+  (Durable **demo opt-out** IS done via iCloud KV.)
+- **All-files-access rationale** — dropped on iOS (no equivalent).
+- Gallery **"Restore last deleted (N)"** toolbar — N/A: iOS can't restore *committed* Photos
+  deletions; undo is the post-delete toast + the staged Trash (restore before commit).
+- **Jump-swap FAB** (§3) — minor, deliberately omitted (low value).
+
 ## Next steps (in order)
 
 1. Wire up **mark-month-done** round-trip and confirm curation % updates on Home.
