@@ -48,6 +48,10 @@ struct PlaceBrowseView: View {
                     Image(systemName: "chevron.left")
                 }
             }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                // Jump straight to Home from anywhere in the drill (no repeated back-taps).
+                Button { dismiss() } label: { Image(systemName: "house") }
+            }
         }
         .searchable(text: $vm.query, placement: .navigationBarDrawer(displayMode: .always),
                     prompt: "Search a city, state, or country")

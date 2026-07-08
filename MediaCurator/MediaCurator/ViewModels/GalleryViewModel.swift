@@ -394,18 +394,18 @@ final class GalleryViewModel: ObservableObject {
         recomputeHideBar()
     }
 
-    /// Tap on the pinned "Hide {Month}" bar.
+    /// Tap on the pinned "Hide {Month}" bar. (Hiding does NOT retire the coach hints — they keep
+    /// helping on later months until the user actively dismisses them with the ✕.)
     func hideOpenMonth() {
         guard let open = openMonthKey else { return }
         walkedCounts[open] = openMonthItemCount
         prefs.setWalkedCount(month: open, count: openMonthItemCount)
-        retireHints()
         openMonthKey = nil
         hideBarState = .none
         markMonthDone(key: open)   // hides + shows the undo toast + rebuilds
     }
 
-    /// Dismiss (✕) a coach hint — retires all future coaching.
+    /// Dismiss (✕) a coach hint — the ONLY thing that retires future coaching.
     func dismissHideHint() {
         retireHints()
         recomputeHideBar()
