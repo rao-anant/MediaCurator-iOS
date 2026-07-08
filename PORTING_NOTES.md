@@ -262,6 +262,25 @@ tested `WalkLatch` ordering rule (WL-3b) still holds, but the G-1/G-2/G-3 "settl
 guards are approximated (no explicit animation-settle gate yet) — revisit if real-device
 scrolling shows a false latch. Sticky header (§3) still not built.
 
+## Place search (Android v1.1 §7) — mostly DONE
+
+Ported the offline reverse-geocoding "search & browse by place" feature:
+- **Pure core + tests**: `GeoIndex` (3-D unit-sphere k-d tree nearest-city, antimeridian-safe),
+  `PlaceBrowse` (ranked aggregation), `PlaceSearch` (diacritic/Turkish normalize + edit-distance-1
+  typo tolerance + alias match). All unit-tested (`GeoIndexTests`, `PlaceBrowseTests`, `PlaceSearchTests`).
+- **Data**: bundled `geo_cities.tsv` (~15MB) + `country_codes.tsv` in `Resources/`.
+- **Store/index**: `PlaceStore` (actor; localIdentifier→city|state|country|aliases, empty=no-GPS),
+  `PlaceIndexer` (actor; reads `PHAsset.location` — no extra permission on iOS — → nearest city).
+- **UI**: `PlaceBrowseView` (mode A flat cities, mode B drill w/ teal breadcrumb, sort toggle,
+  `.searchable` place search → photo grid → viewer). Two gated Home cards + Settings toggle
+  (default-on, clears cache off) + GeoNames CC-BY attribution.
+- **Verified** end-to-end with GPS-tagged test photos (`~/Desktop/make_gps_photos.py`,
+  `~/Desktop/gps-photos/` — London/Paris/Tokyo/NewYork/Bengaluru).
+
+**Remaining for full parity with Android `4202b7c`:**
+- Selection actions on place results (long-press multi-select → Share/Delete unified action bar).
+- Reinstall-safe place-index backup (Android=Downloads; iOS→iCloud/Documents; deferred).
+
 ## Next steps (in order)
 
 1. Wire up **mark-month-done** round-trip and confirm curation % updates on Home.
