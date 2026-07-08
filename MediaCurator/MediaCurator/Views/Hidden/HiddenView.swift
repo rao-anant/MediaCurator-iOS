@@ -37,21 +37,12 @@ struct HiddenView: View {
             .padding()
 
             if let key = selectedMonthKey {
-                ScrollView {
-                    LazyVGrid(columns: gridColumns, spacing: 2) {
-                        ForEach(vm.items(forMonth: key)) { item in
-                            MediaThumbnailView(cell: .init(mediaItem: item, monthKey: key,
-                                                           indexInMonth: 0, dateLabel: nil,
-                                                           structuralVersion: 0)) {
-                                viewerItem = item
-                            }
-                        }
+                SelectablePhotoGrid(items: vm.items(forMonth: key),
+                                    onOpen: { viewerItem = $0 },
+                                    onDeleted: { vm.load() })
+                    .fullScreenCover(item: $viewerItem) { item in
+                        SimpleMediaViewer(items: vm.items(forMonth: key), startingID: item.id)
                     }
-                    .padding(.horizontal, 2)
-                }
-                .fullScreenCover(item: $viewerItem) { item in
-                    SimpleMediaViewer(items: vm.items(forMonth: key), startingID: item.id)
-                }
             } else {
                 Spacer()
                 Text("Pick a year and month above to view it.")

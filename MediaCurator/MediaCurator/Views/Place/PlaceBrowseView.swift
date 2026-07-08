@@ -90,17 +90,9 @@ struct PlaceBrowseView: View {
     }
 
     private func photoGrid(_ items: [MediaItem]) -> some View {
-        ScrollView {
-            LazyVGrid(columns: photoCols, spacing: 2) {
-                ForEach(items) { item in
-                    MediaThumbnailView(cell: .init(mediaItem: item, monthKey: "", indexInMonth: 0,
-                                                   dateLabel: nil, structuralVersion: 0)) {
-                        selectedItem = item
-                    }
-                }
-            }
-            .padding(.horizontal, 2)
-        }
+        SelectablePhotoGrid(items: items,
+                            onOpen: { selectedItem = $0 },
+                            onDeleted: { vm.load() })
     }
 
     @ViewBuilder
