@@ -302,6 +302,15 @@ Stats, Duplicates, Settings export/import, Help, first-run demo.)
 - Cross-reinstall **Downloads backups** (hidden-months, place-index, lifetime "cleaned up",
   "Restore your progress?" offer) — Android-specific; iOS maps to iCloud/Documents; deferred.
   (Durable **demo opt-out** IS done via iCloud KV.)
+  - **Decision when implemented (privacy + cost):** put the *small* durable state
+    (hidden-months set, curation flags, "cleaned up" counter) in the **iCloud Key-Value store**
+    — it survives reinstall, is free, and does **not** count against the user's iCloud quota
+    (limits: ~1 MB total, ~1 KB/value, 1024 keys — plenty for these). Do **NOT** back up the
+    **place index**: CloudKit-private and iCloud Drive both consume the *user's* iCloud quota
+    and would park location-derived data in the cloud (against "nothing leaves the device") —
+    it re-scans from EXIF for free, so let it rebuild on reinstall. Also mark any large
+    regenerable local file `isExcludedFromBackup = true` so it doesn't bloat the user's iCloud
+    device backup (which also counts against their quota).
 - **All-files-access rationale** — dropped on iOS (no equivalent).
 - Gallery **"Restore last deleted (N)"** toolbar — N/A: iOS can't restore *committed* Photos
   deletions; undo is the post-delete toast + the staged Trash (restore before commit).
