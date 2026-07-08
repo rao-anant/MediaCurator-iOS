@@ -31,8 +31,24 @@ struct HomeView: View {
                         HeroCard(state: state) {
                             path.append(NavDestination.gallery(monthKey: state.resumeMonthKey))
                         }
-                        // Secondary actions. (Search is Phase 2 — it depends on the Files-app /
-                        // PDF-text integration that v1 does not include; see PORTING_NOTES §12.)
+                        // Browse by Location — compact chips right under the hero (matches
+                        // Android), dimmed until ≥1 place is indexed (spec §7).
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Browse by Location")
+                                .font(.subheadline).bold().foregroundStyle(.secondary)
+                            HStack(spacing: 12) {
+                                LocationChip(title: "By City", icon: "building.2", subtitle: placeSub,
+                                             disabled: !placeReady) { path.append(NavDestination.placeCities) }
+                                LocationChip(title: "Drill down", icon: "globe", subtitle: "Country › City",
+                                             disabled: !placeReady) { path.append(NavDestination.placeDrill) }
+                            }
+                        }
+
+                        // Hidden months — full width.
+                        NavCard(title: "Hidden months", subtitle: state.hiddenSub, icon: "eye.slash") {
+                            path.append(NavDestination.hidden)
+                        }
+
                         LazyVGrid(columns: twoColumns, spacing: 12) {
                             GridCard(title: "Free up space", subtitle: "Biggest files first", icon: "internaldrive") {
                                 path.append(NavDestination.gallery(monthKey: nil))
@@ -40,20 +56,9 @@ struct HomeView: View {
                             GridCard(title: "Find duplicates", subtitle: state.dupSub, icon: "doc.on.doc") {
                                 path.append(NavDestination.duplicates)
                             }
-                            // Place browse (spec §7) — dimmed/disabled until ≥1 place is indexed.
-                            GridCard(title: "Browse by location", subtitle: placeSub, icon: "map",
-                                     disabled: !placeReady) {
-                                path.append(NavDestination.placeCities)
-                            }
-                            GridCard(title: "Drill by location", subtitle: "Country › State › City", icon: "globe",
-                                     disabled: !placeReady) {
-                                path.append(NavDestination.placeDrill)
-                            }
-                            GridCard(title: "Hidden months", subtitle: state.hiddenSub, icon: "eye.slash") {
-                                path.append(NavDestination.hidden)
-                            }
                         }
-                        // Trash spans full width below the grid.
+
+                        // Trash — full width.
                         NavCard(title: "Trash", subtitle: state.trashSub, icon: "trash", disabled: state.trashEmpty) {
                             path.append(NavDestination.trash)
                         }
@@ -165,6 +170,34 @@ private struct HeroCard: View {
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Compact "Browse by Location" chip (By City / Drill down).
+private struct LocationChip: View {
+    let title: String
+    let icon: String
+    let subtitle: String
+    var disabled: Bool = false
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 8) {
+                Image(systemName: icon).foregroundStyle(Color.accentColor)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.subheadline).bold()
+                    Text(subtitle).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.5 : 1)
     }
 }
 

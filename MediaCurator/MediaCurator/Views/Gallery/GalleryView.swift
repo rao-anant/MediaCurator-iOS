@@ -217,15 +217,10 @@ struct GalleryView: View {
         }
     }
 
-    /// Amber coach hint with an animated down-chevron "wave" and a dismiss ✕.
+    /// Amber coach hint with an animated 3-chevron "wave" and a dismiss ✕.
     private func hintBar(text: String) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: "chevron.down")
-                .font(.subheadline.bold())
-                .foregroundStyle(.orange)
-                .offset(y: hintBob ? 2 : -2)
-                .animation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true), value: hintBob)
-                .onAppear { hintBob = true }
+            ChevronWave()
             Text(text)
                 .font(.subheadline.bold())
                 .foregroundStyle(.orange)
@@ -340,6 +335,11 @@ struct GalleryView: View {
                             .id(blockID)
                         }
                     }
+                    // Bottom inset so the last month's footer scrolls clear of the pinned
+                    // Hide/hint bar — otherwise the footer sits behind the bar, its onAppear
+                    // never fires, and the walk gate can't register "reached the end" (spec §3
+                    // "never covers content"; fixes Hide not appearing at the true bottom).
+                    Color.clear.frame(height: 96)
                 }
             }
             .coordinateSpace(name: "galleryScroll")
@@ -504,5 +504,29 @@ private struct HeaderPosKey: PreferenceKey {
     static var defaultValue: [String: CGFloat] = [:]
     static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
         value.merge(nextValue()) { _, new in new }
+    }
+}
+
+// MARK: - Animated coach chevron wave (spec §3)
+
+/// Three amber chevrons that bob in a staggered wave and brighten top→bottom, honoring
+/// reduce-motion. Mirrors the Android coach marquee.
+private struct ChevronWave: View {
+    @State private var animating = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(spacing: -2) {
+            ForEach(0..<3) { i in
+                Image(systemName: "chevron.down")
+                    .font(.caption.bold())
+                    .foregroundStyle(.orange.opacity(0.4 + Double(i) * 0.3))
+                    .offset(y: animating ? 2 : -2)
+                    .animation(reduceMotion ? nil :
+                        .easeInOut(duration: 0.6).repeatForever(autoreverses: true).delay(Double(i) * 0.12),
+                        value: animating)
+            }
+        }
+        .onAppear { animating = true }
     }
 }

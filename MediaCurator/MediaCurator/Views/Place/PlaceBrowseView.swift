@@ -68,25 +68,49 @@ struct PlaceBrowseView: View {
         }
     }
 
+    private let chipCols = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+
     private var placeList: some View {
-        List(vm.list) { place in
-            Button {
-                vm.tapListItem(place.name)
-            } label: {
-                HStack {
-                    Image(systemName: vm.listItemsAreCities ? "building.2" : "globe")
-                        .foregroundStyle(Color.accentColor)
-                    Text(place.name)
-                    Spacer()
-                    Text("\(place.count)").foregroundStyle(.secondary)
-                    if !vm.listItemsAreCities {
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
-                    }
+        ScrollView {
+            LazyVGrid(columns: chipCols, spacing: 10) {
+                ForEach(vm.list) { place in
+                    Button { vm.tapListItem(place.name) } label: { chip(for: place) }
+                        .buttonStyle(.plain)
                 }
             }
-            .buttonStyle(.plain)
+            .padding()
         }
-        .listStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func chip(for place: PlaceCount) -> some View {
+        if vm.listItemsAreCities {
+            // Colorful per-city chip (🏙️ + name · count).
+            let c = ChipPalette.color(for: place.name)
+            HStack(spacing: 6) {
+                Text("🏙️").font(.caption)
+                Text("\(place.name) · \(place.count)")
+                    .font(.subheadline).foregroundStyle(.white)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .background(Color(red: c.0, green: c.1, blue: c.2), in: RoundedRectangle(cornerRadius: 12))
+        } else {
+            // Country (flag) / state (🚩) chip on a neutral surface.
+            HStack(spacing: 6) {
+                Text(mode == .drill && vm.country == nil ? CountryFlags.flag(for: place.name) : "🚩")
+                    .font(.subheadline)
+                Text("\(place.name) · \(place.count)")
+                    .font(.subheadline)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator), lineWidth: 0.5))
+        }
     }
 
     private func photoGrid(_ items: [MediaItem]) -> some View {
