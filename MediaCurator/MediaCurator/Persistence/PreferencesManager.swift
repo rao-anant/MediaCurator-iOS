@@ -229,7 +229,10 @@ final class PreferencesManager {
     /// months, the coaching flags, and the lifetime "cleaned up" totals. NOT the demo opt-out
     /// (a separate set-once marker below) and NOT the place index (that re-scans from EXIF).
     private static let durableKeys: [String] = [
-        Key.doneMonths, Key.scrollHintRetired, Key.hideCoachMarkShown,
+        Key.doneMonths,                                     // hidden months
+        Key.stagedForDeletion,                              // the app Trash (soft-deleted items)
+        Key.walkedCounts, Key.seenSubGroups,                // curation review progress
+        Key.scrollHintRetired, Key.hideCoachMarkShown,      // coaching flags
         Key.placeIntroShown, Key.seenOnboarding,
         "stats_total_deleted", "stats_total_bytes_freed",   // DeletionStatsStore
     ]
