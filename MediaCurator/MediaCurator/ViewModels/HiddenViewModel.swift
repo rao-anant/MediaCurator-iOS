@@ -57,7 +57,10 @@ final class HiddenViewModel: ObservableObject {
             isLoading = true
             defer { isLoading = false }
 
-            let media = await MediaCache.shared.get(repo: repo)
+            // Exclude items staged for deletion so a photo deleted from a hidden month's preview
+            // grid leaves it and doesn't resurface on re-query (same guard as gallery/place-browse).
+            let staged = prefs.getStagedForDeletion()
+            let media = (await MediaCache.shared.get(repo: repo)).filter { !staged.contains($0.id) }
             allMedia = media
             let done  = prefs.getDoneMonths()
             let cal   = Calendar.current

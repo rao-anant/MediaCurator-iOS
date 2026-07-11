@@ -21,7 +21,7 @@ struct SettingsView: View {
                         if !on { Task { await PlaceStore.shared.clear() } }   // clears the local place cache
                     }
             } footer: {
-                Text("Finds the city each photo was taken in, fully offline. Turning it off clears the local place cache. Place data © GeoNames (CC BY 4.0).")
+                Text("Finds the city each photo was taken in, fully offline. Location is approximate, and only photos that have GPS data appear. Turning it off clears the local place cache. Place data © GeoNames (CC BY 4.0).")
             }
 
             Section("Hidden months") {

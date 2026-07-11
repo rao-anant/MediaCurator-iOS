@@ -76,6 +76,11 @@ struct GalleryView: View {
                     Divider()
                     sortBar
                     galleryContent
+                        // In selection mode the action bar sits BELOW the grid and insets it,
+                        // rather than overlaying the last row (parity with Android a29).
+                        .safeAreaInset(edge: .bottom, spacing: 0) {
+                            if vm.selectionMode { selectionBar }
+                        }
                 }
             case .denied, .restricted:
                 permissionDeniedView
@@ -85,23 +90,25 @@ struct GalleryView: View {
                 Color.clear
             }
         }
+        // Selection bar is handled via safeAreaInset above (it must not occlude the grid). These
+        // are transient floating elements and only show when NOT selecting.
         .overlay(alignment: .bottom) {
-            if vm.selectionMode {
-                selectionBar
-            } else if let undo = vm.pendingUndo {
-                toast(message: undo.message) { vm.undoDelete() }
-            } else if let done = vm.doneToast {
-                toast(message: "\(done.label) marked done") { vm.undoMarkDone() }
-            } else if vm.hideBarState != .none && vm.sortMode != .sizeAbsolute {
-                hideMonthBar
-            } else if let msg = filterToast {
-                Text(msg)
-                    .font(.subheadline)
-                    .padding(.horizontal, 20).padding(.vertical, 12)
-                    .background(.regularMaterial, in: Capsule())
-                    .shadow(radius: 8, y: 2)
-                    .padding(.bottom, 24)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            if !vm.selectionMode {
+                if let undo = vm.pendingUndo {
+                    toast(message: undo.message) { vm.undoDelete() }
+                } else if let done = vm.doneToast {
+                    toast(message: "\(done.label) marked done") { vm.undoMarkDone() }
+                } else if vm.hideBarState != .none && vm.sortMode != .sizeAbsolute {
+                    hideMonthBar
+                } else if let msg = filterToast {
+                    Text(msg)
+                        .font(.subheadline)
+                        .padding(.horizontal, 20).padding(.vertical, 12)
+                        .background(.regularMaterial, in: Capsule())
+                        .shadow(radius: 8, y: 2)
+                        .padding(.bottom, 24)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
         }
         .animation(.spring(duration: 0.3), value: vm.pendingUndo)

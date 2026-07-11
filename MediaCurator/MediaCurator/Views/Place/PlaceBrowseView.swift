@@ -6,7 +6,9 @@ struct PlaceBrowseView: View {
     let mode: PlaceBrowseViewModel.Mode
     @StateObject private var vm: PlaceBrowseViewModel
     @State private var selectedItem: MediaItem? = nil
+    @State private var showIntro = false
     @Environment(\.dismiss) private var dismiss
+    private let prefs = PreferencesManager()
 
     init(mode: PlaceBrowseViewModel.Mode) {
         self.mode = mode
@@ -17,6 +19,7 @@ struct PlaceBrowseView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if showIntro { placeIntroBanner }
             if mode == .drill && !vm.breadcrumb.isEmpty { breadcrumbBar }
             if vm.selectedCity == nil { sortBar }
 
@@ -55,7 +58,10 @@ struct PlaceBrowseView: View {
         }
         .searchable(text: $vm.query, placement: .navigationBarDrawer(displayMode: .always),
                     prompt: "Search a city, state, or country")
-        .onAppear { vm.load() }
+        .onAppear {
+            vm.load()
+            showIntro = !prefs.isPlaceIntroShown()
+        }
         .fullScreenCover(item: $selectedItem) { item in
             SimpleMediaViewer(items: vm.searching ? vm.searchPhotos : vm.photos, startingID: item.id)
         }
@@ -68,6 +74,28 @@ struct PlaceBrowseView: View {
         }
         .pickerStyle(.segmented)
         .padding(.horizontal).padding(.vertical, 8)
+    }
+
+    /// One-time intro (spec §7 PU-9): explains the feature is GPS-based, approximate, and only
+    /// covers located photos. Dismissed with ✕ and never shown again.
+    private var placeIntroBanner: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "mappin.and.ellipse").foregroundStyle(Color.accentColor)
+            Text("Photos are grouped by where they were taken, from each photo's GPS. Only located photos appear here, and cities are approximate.")
+                .font(.footnote).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button {
+                prefs.setPlaceIntroShown()
+                withAnimation { showIntro = false }
+            } label: {
+                Image(systemName: "xmark").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 12).padding(.top, 8)
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 
     private var breadcrumbBar: some View {

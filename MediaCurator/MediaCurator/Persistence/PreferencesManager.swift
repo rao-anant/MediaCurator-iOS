@@ -30,6 +30,7 @@ final class PreferencesManager {
         static let seenOnboarding       = "seen_onboarding"
         static let lastBatch            = "last_deleted_batch"
         static let hiddenRestoreOffered = "hidden_restore_offered"
+        static let placeIntroShown      = "place_intro_shown"
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -59,6 +60,10 @@ final class PreferencesManager {
     /// reviewed months jump straight to Hide with no teaser/coaching.
     func isScrollHintRetired() -> Bool { defaults.bool(forKey: Key.scrollHintRetired) }
     func setScrollHintRetired() { defaults.set(true, forKey: Key.scrollHintRetired) }
+
+    /// One-time "browse by place" intro banner (spec §7 PU-9) — shown once, ever.
+    func isPlaceIntroShown() -> Bool { defaults.bool(forKey: Key.placeIntroShown) }
+    func setPlaceIntroShown() { defaults.set(true, forKey: Key.placeIntroShown) }
 
     /// Per-month item count captured when a month was fully walked (revisit shortcut).
     func getWalkedCounts() -> [String: Int] {
