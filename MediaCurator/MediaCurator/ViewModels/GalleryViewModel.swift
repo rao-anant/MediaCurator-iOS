@@ -229,9 +229,22 @@ final class GalleryViewModel: ObservableObject {
         if let open = openMonthKey {
             openMonthItemCount     = monthItemCounts[open] ?? 0
             openMonthRenderedLength = built.items.filter { $0.monthKey == open }.count
+            // Count + size for the sticky header — taken from the month's own Header so it matches
+            // the month-row exactly.
+            if let h = built.items.lazy.compactMap({ item -> GalleryItem.Header? in
+                if case .header(let hh) = item, hh.monthKey == open { return hh } else { return nil }
+            }).first {
+                openMonthCount = h.count
+                openMonthBytes = h.totalBytes
+            } else {
+                openMonthCount = openMonthItemCount
+                openMonthBytes = 0
+            }
         } else {
             openMonthItemCount = 0
             openMonthRenderedLength = 0
+            openMonthCount = 0
+            openMonthBytes = 0
         }
         recomputeHideBar()
 
@@ -339,6 +352,9 @@ final class GalleryViewModel: ObservableObject {
 
     /// The single month currently open in the accordion (nil = none). Drives the pinned bar.
     @Published var openMonthKey: String? = nil
+    /// Display metrics for the open month, shown in the sticky header (year › month › "N photos · size").
+    @Published var openMonthCount = 0
+    @Published var openMonthBytes: Int64 = 0
 
     // MARK: - Pinned Hide-month bar (spec §3 / CURATION_REGRESSION_TESTS)
 
@@ -403,6 +419,10 @@ final class GalleryViewModel: ObservableObject {
         openMonthKey = nil
         hideBarState = .none
         markMonthDone(key: open)   // hides + shows the undo toast + rebuilds
+        // The hidden month's rows are gone, so the list is now shorter. Without this the
+        // ScrollView stays parked where the user was (deep in that month) — past the end of the
+        // new content — showing a blank screen. Snap to the top so the remaining months appear.
+        requestScroll(toID: "gallery-top")
     }
 
     /// Dismiss (✕) a coach hint — the ONLY thing that retires future coaching.

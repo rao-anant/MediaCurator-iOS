@@ -15,17 +15,37 @@ struct GalleryView: View {
     @State private var showScrollTop = false
     @State private var headerPositions: [String: CGFloat] = [:]
     @State private var viewportHeight: CGFloat = 0
+    @State private var viewportWidth: CGFloat = 0
+    @Environment(\.displayScale) private var displayScale
+
+    /// Pixel size to request each thumbnail at — the cell's point width (viewport ÷ 4 columns)
+    /// times the screen scale. Computed once from the stable viewport width so the request key
+    /// doesn't change during a month's expand animation (which caused thumbnails to flicker).
+    private var cellTargetPx: CGFloat {
+        let w = viewportWidth > 0 ? viewportWidth : 400
+        return max(240, (w / 4) * displayScale)
+    }
 
     /// Sticky context (spec §3): the year always, the month when scrolled into one. Derived from
     /// the closest header that has scrolled to/above the top. Hidden in flat size-sort mode.
     private var stickyYear: String? {
         guard vm.sortMode != .sizeAbsolute else { return nil }
+        // An open month pins its own year (avoids the strip going blank / wrong for short months).
+        if let open = vm.openMonthKey { return String(open.prefix(4)) }
         let ys = headerPositions.filter { $0.key.hasPrefix("Y:") && $0.value <= 0 }
         guard let top = ys.max(by: { $0.value < $1.value }) else { return nil }
         return String(top.key.dropFirst(2))
     }
     private var stickyMonthLabel: String? {
-        guard vm.sortMode != .sizeAbsolute, let year = stickyYear else { return nil }
+        guard vm.sortMode != .sizeAbsolute else { return nil }
+        // When a month is expanded, always show its label — derived straight from the open-month
+        // key (same source as the Hide bar), NOT from on-screen header positions. In a long month
+        // the month header scrolls off the top and the lazy list drops it, which previously made
+        // the label vanish so only the year showed (see chandrika.jpg).
+        if let open = vm.openMonthKey {
+            return Formatters.monthLabel(from: open)
+        }
+        guard let year = stickyYear else { return nil }
         let ms = headerPositions.filter { $0.key.hasPrefix("M:\(year)-") && $0.value <= 0 }
         guard let top = ms.max(by: { $0.value < $1.value }) else { return nil }
         return top.key.split(separator: "|").last.map(String.init)
@@ -142,7 +162,14 @@ struct GalleryView: View {
                         if let key = vm.openMonthKey { vm.toggleMonthExpansion(key) }
                     } label: {
                         HStack {
-                            Text(month).font(.caption).foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(month).font(.subheadline).foregroundStyle(.primary)
+                                // Count + size in a smaller font (matches Android's month strip).
+                                if vm.openMonthKey != nil {
+                                    Text("\(Formatters.countShort(vm.openMonthCount)) photos · \(Formatters.bytes(vm.openMonthBytes))")
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                }
+                            }
                             Spacer()
                         }
                         .padding(.horizontal, 16).padding(.vertical, 4)
@@ -318,6 +345,7 @@ struct GalleryView: View {
                                 ForEach(cells, id: \.mediaItem.id) { cell in
                                     MediaThumbnailView(
                                         cell: cell,
+                                        targetPx: cellTargetPx,
                                         isSelecting: vm.selectionMode,
                                         isSelected: vm.selectedIDs.contains(cell.mediaItem.id),
                                         onTap: {
@@ -356,8 +384,9 @@ struct GalleryView: View {
                 vm.evaluateWalk(headerVisible: headerVisible, footerVisible: footerVisible)
             }
             .background(GeometryReader { g in
-                Color.clear.onAppear { viewportHeight = g.size.height }
+                Color.clear.onAppear { viewportHeight = g.size.height; viewportWidth = g.size.width }
                                      .onChange(of: g.size.height) { viewportHeight = $0 }
+                                     .onChange(of: g.size.width) { viewportWidth = $0 }
             })
             .overlay(alignment: .top) { stickyHeader }
             .refreshable { vm.loadMedia(forceRefresh: true) }
@@ -366,11 +395,15 @@ struct GalleryView: View {
             }
             .onChange(of: vm.scrollRequest) { req in
                 // Opening a year / month / sub-group lands it at the top (§3 Landing, G-5/G-6).
-                // Runs after the list relayout. (No sticky header yet, so anchor .top = offset 0;
-                // revisit the below-sticky-strip offset from G-5 when the sticky header is built.)
+                // The list is mid-relayout (the accordion collapses other months while the tapped
+                // level's rows appear), so a single early scroll can miss the target's final
+                // position. Nudge it a few times across the settle window — once the target is at
+                // the top the later calls are no-ops, so it lands reliably without visible jank.
                 guard let req else { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    withAnimation { proxy.scrollTo(req.id, anchor: .top) }
+                for delay in [0.05, 0.2, 0.4, 0.65] {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                        withAnimation(.easeInOut(duration: 0.2)) { proxy.scrollTo(req.id, anchor: .top) }
+                    }
                 }
             }
             .overlay(alignment: .bottomTrailing) {

@@ -30,10 +30,11 @@ enum CountryFlags {
 /// Deterministic colorful chip background per place name (cities repeat colors — that's fine,
 /// it just reads as varied; matches Android's by-city look).
 enum ChipPalette {
+    // Deep, saturated tones (white text reads cleanly on all of them).
     static let colors: [(r: Double, g: Double, b: Double)] = [
-        (0.26, 0.45, 0.85), (0.90, 0.30, 0.45), (0.55, 0.35, 0.80), (0.20, 0.62, 0.55),
-        (0.95, 0.62, 0.20), (0.30, 0.55, 0.90), (0.40, 0.62, 0.30), (0.55, 0.42, 0.35),
-        (0.85, 0.40, 0.30), (0.30, 0.68, 0.68), (0.62, 0.35, 0.62), (0.40, 0.45, 0.75),
+        (0.13, 0.27, 0.60), (0.70, 0.14, 0.28), (0.36, 0.18, 0.58), (0.09, 0.42, 0.38),
+        (0.72, 0.42, 0.06), (0.15, 0.35, 0.62), (0.22, 0.44, 0.19), (0.42, 0.27, 0.20),
+        (0.62, 0.22, 0.15), (0.11, 0.44, 0.46), (0.44, 0.19, 0.44), (0.22, 0.28, 0.54),
     ]
 
     static func color(for name: String) -> (Double, Double, Double) {

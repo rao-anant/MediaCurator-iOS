@@ -38,8 +38,15 @@ actor PlaceStore {
         cache[id] = (size, Self.encode(city))
     }
 
-    /// Count of photos that resolved to a place (excludes "no GPS" markers).
-    func locatedCount() -> Int { cache.values.filter { !$0.value.isEmpty }.count }
+    /// Count of photos that resolved to a place (excludes "no GPS" markers). Pass live ids to
+    /// exclude stale entries for deleted photos, so the Home count matches what "By City" shows.
+    func locatedCount(validIDs: Set<String>? = nil) -> Int {
+        cache.reduce(0) { acc, kv in
+            guard !kv.value.value.isEmpty else { return acc }
+            if let validIDs, !validIDs.contains(kv.key) { return acc }
+            return acc + 1
+        }
+    }
 
     var isEmpty: Bool { cache.isEmpty }
 

@@ -19,7 +19,9 @@ struct HomeView: View {
     private var placeReady: Bool { (vm.state?.placeCount ?? 0) > 0 }
     private var placeSub: String {
         let n = vm.state?.placeCount ?? 0
-        return n == 0 ? "Scanning photos…" : "\(Formatters.countShort(n)) located"
+        if n > 0 { return "\(Formatters.countShort(n)) located" }
+        // Distinguish "still working" from "finished, nothing had GPS" (spec §7).
+        return (vm.state?.placeIndexingDone ?? false) ? "No location data" : "Scanning photos…"
     }
 
     var body: some View {
@@ -39,7 +41,7 @@ struct HomeView: View {
                             HStack(spacing: 12) {
                                 LocationChip(title: "By City", icon: "building.2", subtitle: placeSub,
                                              disabled: !placeReady) { path.append(NavDestination.placeCities) }
-                                LocationChip(title: "Drill down", icon: "globe", subtitle: "Country › City",
+                                LocationChip(title: "By Country", icon: "globe", subtitle: "Country › State › City",
                                              disabled: !placeReady) { path.append(NavDestination.placeDrill) }
                             }
                         }
@@ -77,9 +79,17 @@ struct HomeView: View {
                         Image(systemName: "info.circle")
                     }
                 }
+                // Overflow menu mirrors Android's three-dot menu: Help + Settings together.
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    NavigationLink(value: NavDestination.settings) {
-                        Image(systemName: "gearshape")
+                    Menu {
+                        Button { path.append(NavDestination.help) } label: {
+                            Label("Help", systemImage: "questionmark.circle")
+                        }
+                        Button { path.append(NavDestination.settings) } label: {
+                            Label("Settings", systemImage: "gearshape")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
                     }
                 }
             }
@@ -91,6 +101,7 @@ struct HomeView: View {
                 case .hidden:            HiddenView()
                 case .trash:             TrashView()
                 case .settings:          SettingsView()
+                case .help:              HelpView()
                 case .placeCities:       PlaceBrowseView(mode: .cities)
                 case .placeDrill:        PlaceBrowseView(mode: .drill)
                 }
@@ -127,6 +138,7 @@ enum NavDestination: Hashable {
     case hidden
     case trash
     case settings
+    case help
     case placeCities
     case placeDrill
 }

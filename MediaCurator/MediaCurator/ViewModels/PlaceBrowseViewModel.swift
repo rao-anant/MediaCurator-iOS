@@ -44,7 +44,12 @@ final class PlaceBrowseViewModel: ObservableObject {
 
     func load() {
         Task {
-            media = await MediaCache.shared.get(repo: repo)
+            // Exclude items staged for deletion (app trash). They're still in the Photos library
+            // until the deletion commits, so without this a deleted photo resurfaces in the place
+            // grid/counts on the next re-query. (Parity with Android's session-delete guard — here
+            // the persisted staged set IS the guard, so it also survives across sessions.)
+            let staged = prefs.getStagedForDeletion()
+            media = (await MediaCache.shared.get(repo: repo)).filter { !staged.contains($0.id) }
             let liveIDs = Set(media.map(\.id))
 
             // Kick indexing if enabled and there's unscanned work.
@@ -56,7 +61,12 @@ final class PlaceBrowseViewModel: ObservableObject {
             records = await PlaceStore.shared.records(validIDs: liveIDs)
             placeByID = await PlaceStore.shared.placeByID(validIDs: liveIDs)
             searchTokens = await PlaceStore.shared.searchIndex()
+            // Preserve the open city across a refresh (e.g. after deleting a photo from its grid),
+            // so the user stays on the grid — now minus the deleted item — instead of being
+            // bounced back to the city list. rebuild() keeps country/state, only clearing the city.
+            let keepCity = selectedCity
             rebuild()
+            if let keepCity { openCity(keepCity.city) }
         }
     }
 

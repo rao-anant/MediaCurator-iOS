@@ -18,6 +18,9 @@ struct HomeState {
     let trashSub: String
     let trashEmpty: Bool
     var placeCount: Int = 0
+    /// True once the background place-indexing pass has finished, so the UI can distinguish
+    /// "still scanning" from "finished, but no photos had location data".
+    var placeIndexingDone: Bool = false
 }
 
 @MainActor
@@ -77,7 +80,7 @@ final class HomeViewModel: ObservableObject {
             let trashBytes   = trashItems.reduce(0) { $0 + $1.size }
 
             await PlaceStore.shared.ensureLoaded()
-            let placeCount = await PlaceStore.shared.locatedCount()
+            let placeCount = await PlaceStore.shared.locatedCount(validIDs: liveIDs)
 
             var built = buildState(
                 total: media.count,
@@ -96,11 +99,21 @@ final class HomeViewModel: ObservableObject {
             // location cards light up. Refresh the count when it finishes.
             if prefs.isPlaceSearchEnabled() {
                 Task.detached(priority: .background) {
-                    let n = await PlaceIndexer.shared.index(media) { _, _ in }
+                    _ = await PlaceIndexer.shared.index(media) { _, _ in }
+                    // Count only located photos still in the live library (matches "By City").
+                    let n = await PlaceStore.shared.locatedCount(validIDs: Set(media.map(\.id)))
                     await MainActor.run {
-                        if var s = self.state { s.placeCount = n; self.state = s }
+                        if var s = self.state {
+                            s.placeCount = n
+                            s.placeIndexingDone = true
+                            self.state = s
+                        }
                     }
                 }
+            } else {
+                // Place search is off — not "scanning", just unavailable.
+                built.placeIndexingDone = true
+                state = built
             }
         }
     }

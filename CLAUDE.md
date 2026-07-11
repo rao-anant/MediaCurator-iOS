@@ -106,3 +106,7 @@ HomeActivity (launcher)
 ## Play Store notes
 
 See `PLAYSTORE.md` for store listing copy, `MANAGE_EXTERNAL_STORAGE` justification text, data safety answers, and release checklist. App ID: `com.anant.mediacurator`.
+
+---
+
+On startup, read ../MediaCurator/docs/PARITY.md (cross-platform parity ledger). Any row where my platform's status is TODO or WIP is my backlog; when I ship a generic feature or fix, set my cell to DONE with a build stamp (e.g. b42), in the same commit as the code.

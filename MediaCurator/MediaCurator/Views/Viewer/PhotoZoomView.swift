@@ -72,6 +72,9 @@ struct PhotoZoomView: View {
         opts.deliveryMode = .highQualityFormat
         opts.isNetworkAccessAllowed = true
 
+        // Resume exactly once: PHImageManager can invoke the handler more than once, and
+        // resuming a checked continuation twice is a fatal error.
+        var resumed = false
         await withCheckedContinuation { continuation in
             PHImageManager.default().requestImage(
                 for: asset,
@@ -80,7 +83,10 @@ struct PhotoZoomView: View {
                 options: opts
             ) { img, _ in
                 if let img { Task { @MainActor in self.image = img } }
-                continuation.resume()
+                if !resumed {
+                    resumed = true
+                    continuation.resume()
+                }
             }
         }
     }

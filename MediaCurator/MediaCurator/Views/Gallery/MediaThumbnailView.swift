@@ -6,19 +6,24 @@ import Photos
 struct MediaThumbnailView: View {
 
     let cell: GalleryItem.MediaCell
+    /// Pixel size to request the thumbnail at — the true cell size (from the parent's stable
+    /// viewport width) so it's crisp on iPad without re-firing during layout. Other grids
+    /// (Trash, Duplicates) use the default, which is sharp enough for their larger cells.
+    var targetPx: CGFloat = 500
     var isSelecting: Bool = false
     var isSelected: Bool = false
     let onTap: () -> Void
     var onLongPress: (() -> Void)? = nil
 
     @State private var image: UIImage? = nil
-    /// Pixel target for the thumbnail request; the view itself fills its grid cell.
-    private let requestPx: CGFloat = 220
 
     var body: some View {
         Button(action: onTap) {
-            ZStack {
-                Group {
+            // A fixed square cell sized to the column width; the image fills it and is clipped, so
+            // every thumbnail is identical in size and none overflow into (obscure) their neighbours.
+            Color.clear
+                .aspectRatio(1, contentMode: .fit)
+                .overlay {
                     if let img = image {
                         Image(uiImage: img)
                             .resizable()
@@ -26,54 +31,50 @@ struct MediaThumbnailView: View {
                     } else {
                         Rectangle()
                             .fill(Color(.secondarySystemBackground))
-                            .overlay(
-                                Image(systemName: iconName)
-                                    .foregroundStyle(.tertiary)
-                            )
+                            .overlay(Image(systemName: iconName).foregroundStyle(.tertiary))
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .aspectRatio(1, contentMode: .fill)
                 .clipped()
-
                 // Duration badge for video (bottom-leading)
-                if cell.mediaItem.type == .video && cell.mediaItem.duration > 0 {
-                    badge(durationString(cell.mediaItem.duration), bold: true)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .overlay(alignment: .bottomLeading) {
+                    if cell.mediaItem.type == .video && cell.mediaItem.duration > 0 {
+                        badge(durationString(cell.mediaItem.duration), bold: true)
+                    }
                 }
-
                 // File-size badge (bottom-trailing) — always shown
-                badge(Formatters.bytes(cell.mediaItem.size))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-
+                .overlay(alignment: .bottomTrailing) {
+                    badge(Formatters.bytes(cell.mediaItem.size))
+                }
                 // Date badge in flat ("largest files") mode (top-leading)
-                if let label = cell.dateLabel {
-                    badge(label)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .overlay(alignment: .topLeading) {
+                    if let label = cell.dateLabel { badge(label) }
                 }
-
                 // Selection overlay
-                if isSelecting {
-                    Color.black.opacity(isSelected ? 0.25 : 0.0)
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.title3)
-                        .foregroundStyle(isSelected ? Color.accentColor : .white)
-                        .shadow(radius: 1)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .padding(4)
+                .overlay {
+                    if isSelecting {
+                        ZStack {
+                            Color.black.opacity(isSelected ? 0.25 : 0.0)
+                            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                .font(.title3)
+                                .foregroundStyle(isSelected ? Color.accentColor : .white)
+                                .shadow(radius: 1)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                                .padding(4)
+                        }
+                    }
                 }
-            }
-            .clipped()
-            .contentShape(Rectangle())
-            .overlay(
-                Rectangle().stroke(Color.accentColor, lineWidth: isSelected ? 3 : 0)
-            )
+                .contentShape(Rectangle())
+                .overlay(Rectangle().stroke(Color.accentColor, lineWidth: isSelected ? 3 : 0))
         }
         .buttonStyle(.plain)
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.4).onEnded { _ in onLongPress?() }
         )
-        .task(id: cell.mediaItem.id) { await loadThumbnail() }
+        // Load once per cell at the parent's stable pixel target (keyed on both so a rotation /
+        // split-view resize re-requests, but scrolling and month expansion do not — no flicker).
+        .task(id: "\(cell.mediaItem.id)|\(Int(targetPx))") {
+            await loadThumbnail(targetPx: targetPx)
+        }
     }
 
     private func badge(_ text: String, bold: Bool = false) -> some View {
@@ -88,7 +89,7 @@ struct MediaThumbnailView: View {
 
     // MARK: - Thumbnail loading
 
-    private func loadThumbnail() async {
+    private func loadThumbnail(targetPx: CGFloat) async {
         let id = cell.mediaItem.localIdentifier
         let result = PHAsset.fetchAssets(withLocalIdentifiers: [id], options: nil)
         guard let asset = result.firstObject else { return }
@@ -98,17 +99,25 @@ struct MediaThumbnailView: View {
         opts.isNetworkAccessAllowed = true
         opts.isSynchronous = false
 
+        // `.opportunistic` delivers the completion handler MORE THAN ONCE (a fast low-res
+        // thumbnail, then the full-quality image). A checked continuation may only be resumed
+        // once — resuming twice is a fatal error — so resume on the first callback and let any
+        // later, higher-quality delivery keep updating the image.
+        var resumed = false
         await withCheckedContinuation { continuation in
             PHImageManager.default().requestImage(
                 for: asset,
-                targetSize: CGSize(width: requestPx, height: requestPx),
+                targetSize: CGSize(width: targetPx, height: targetPx),
                 contentMode: .aspectFill,
                 options: opts
             ) { img, _ in
                 if let img {
                     Task { @MainActor in self.image = img }
                 }
-                continuation.resume()
+                if !resumed {
+                    resumed = true
+                    continuation.resume()
+                }
             }
         }
     }
