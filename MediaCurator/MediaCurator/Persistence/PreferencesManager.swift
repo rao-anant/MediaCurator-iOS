@@ -223,31 +223,51 @@ final class PreferencesManager {
 
     // MARK: - First-run demo (spec §13)
 
-    /// Durable cross-reinstall store for the opt-out. On iOS this is iCloud key-value (the
-    /// app's Documents/prefs are wiped on reinstall). Needs the iCloud KV entitlement to
-    /// actually persist; degrades to a no-op (prefs-only) without it.
-    private let cloud = NSUbiquitousKeyValueStore.default
+    // MARK: - Reinstall-safe durable backup (keychain — survives uninstall, no iCloud entitlement)
+
+    /// Small, per-device state mirrored to the keychain so it survives an app reinstall: hidden
+    /// months, the coaching flags, and the lifetime "cleaned up" totals. NOT the demo opt-out
+    /// (a separate set-once marker below) and NOT the place index (that re-scans from EXIF).
+    private static let durableKeys: [String] = [
+        Key.doneMonths, Key.scrollHintRetired, Key.hideCoachMarkShown,
+        Key.placeIntroShown, Key.seenOnboarding,
+        "stats_total_deleted", "stats_total_bytes_freed",   // DeletionStatsStore
+    ]
+    private static let durableAccount = "durable_state_v1"
+    private static let demoOptOutAccount = "demo_opted_out_v1"
 
     func isDemoOptedOut() -> Bool { defaults.bool(forKey: Key.demoOptedOut) }
 
-    /// Opt out of the first-run demo. Writes the per-install prefs flag AND the durable
-    /// iCloud marker so the opt-out survives uninstall/reinstall (FR-2).
+    /// Opt out of the first-run demo. Writes the per-install prefs flag AND a durable, set-once
+    /// keychain marker so the opt-out survives uninstall/reinstall (FR-2). Reset never clears the
+    /// marker (FR-3 governs only the current install's prefs flag).
     func setDemoOptedOut(_ v: Bool) {
         defaults.set(v, forKey: Key.demoOptedOut)
-        if v {
-            cloud.set(true, forKey: Key.demoOptedOut)
-            cloud.synchronize()
+        if v { KeychainStore.set(Data([1]), account: Self.demoOptOutAccount) }
+    }
+
+    /// Snapshot the durable keys to the keychain. Cheap; called when the app backgrounds and
+    /// after a curation reset, so the keychain always reflects the latest state.
+    func backupDurableState() {
+        var dict: [String: Any] = [:]
+        for key in Self.durableKeys where defaults.object(forKey: key) != nil {
+            dict[key] = defaults.object(forKey: key)
+        }
+        if let data = try? PropertyListSerialization.data(fromPropertyList: dict, format: .binary, options: 0) {
+            KeychainStore.set(data, account: Self.durableAccount)
         }
     }
 
-    /// Call once at launch. On a FRESH install (never initialized), re-apply a durable
-    /// iCloud opt-out so a user who opted out isn't shown the demo again after reinstall
-    /// (FR-2). After a reset (already initialized), the durable marker is NOT re-applied, so
-    /// reset re-enables the demo for the current install (FR-3).
-    func syncDurableDemoOptOut() {
+    /// Call once at launch. On a FRESH install (never initialized), restore the durable state and
+    /// re-apply the demo opt-out from the keychain (FR-2). After a reset (already initialized),
+    /// nothing is restored, so reset governs the current install (FR-3).
+    func restoreDurableStateIfFreshInstall() {
         guard !defaults.bool(forKey: Key.installInitialized) else { return }
-        cloud.synchronize()
-        if cloud.bool(forKey: Key.demoOptedOut) {
+        if let data = KeychainStore.get(account: Self.durableAccount),
+           let dict = (try? PropertyListSerialization.propertyList(from: data, options: [], format: nil)) as? [String: Any] {
+            for (k, v) in dict { defaults.set(v, forKey: k) }
+        }
+        if KeychainStore.get(account: Self.demoOptOutAccount) != nil {
             defaults.set(true, forKey: Key.demoOptedOut)
         }
         defaults.set(true, forKey: Key.installInitialized)
@@ -270,6 +290,8 @@ final class PreferencesManager {
         ] {
             defaults.removeObject(forKey: key)
         }
+        // Re-snapshot so a later reinstall restores the *reset* state, not the old hidden months.
+        backupDurableState()
     }
 
     /// "YYYY-MM" key, e.g. "2024-03". Static so MonthGroup can call it without an instance.
