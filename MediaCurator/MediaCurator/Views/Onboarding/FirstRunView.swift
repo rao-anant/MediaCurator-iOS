@@ -17,14 +17,14 @@ struct FirstRunView: View {
 
     var body: some View {
         ZStack {
-            Color(.systemBackground).ignoresSafeArea()
-            VStack(spacing: 14) {
+            Color(.systemGroupedBackground).ignoresSafeArea()
+            VStack(spacing: 16) {
                 header
                 surface
-                Spacer(minLength: 4)
+                Spacer(minLength: 2)
                 if isLast && !replayMode {
                     Toggle("Don't show again", isOn: $dontShowAgain)
-                        .font(.subheadline).padding(.horizontal, 4)
+                        .font(.subheadline).tint(.accentColor).padding(.horizontal, 4)
                 }
                 navRow
             }
@@ -48,19 +48,22 @@ struct FirstRunView: View {
     }
 
     private var header: some View {
-        VStack(spacing: 4) {
-            Text("How curating works").font(.title2).bold()
+        VStack(spacing: 5) {
+            Text("How curating works")
+                .font(.system(.title, design: .rounded)).fontWeight(.bold)
             Text("Tap through at your own pace — review a month, hide it, and it steps out of your way.")
-                .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
     }
 
     private var surface: some View {
-        VStack(spacing: 14) {
-            HStack(spacing: 7) {
+        VStack(spacing: 16) {
+            HStack(spacing: 8) {
                 ForEach(0..<slideCount, id: \.self) { i in
-                    Circle().fill(i == slide ? Color.accentColor : Color.secondary.opacity(0.3))
-                        .frame(width: 7, height: 7)
+                    Capsule()
+                        .fill(i == slide ? Color.accentColor : Color.secondary.opacity(0.25))
+                        .frame(width: i == slide ? 20 : 7, height: 7)
+                        .animation(.spring(duration: 0.3), value: slide)
                 }
             }
             Group {
@@ -73,16 +76,22 @@ struct FirstRunView: View {
             }
             .frame(maxWidth: .infinity, minHeight: 380, alignment: .top)
         }
-        .padding()
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18))
+        .padding(18)
+        .background(
+            LinearGradient(colors: [Color.accentColor.opacity(0.07), Color(.secondarySystemBackground)],
+                           startPoint: .top, endPoint: .bottom),
+            in: RoundedRectangle(cornerRadius: 24)
+        )
+        .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Color.accentColor.opacity(0.12), lineWidth: 1))
     }
 
     private var navRow: some View {
         HStack {
             if slide > 0 {
                 Button { withAnimation { slide -= 1 } } label: {
-                    Label("Back", systemImage: "chevron.left").font(.subheadline)
+                    Label("Back", systemImage: "chevron.left").font(.body.weight(.medium))
                 }
+                .tint(.accentColor)
             }
             Spacer()
             Button {
@@ -91,8 +100,9 @@ struct FirstRunView: View {
             } label: {
                 Text(isLast ? "Done" : "Next")
                     .font(.headline).foregroundStyle(.white)
-                    .padding(.horizontal, 24).padding(.vertical, 10)
+                    .padding(.horizontal, 28).padding(.vertical, 12)
                     .background(Color.accentColor, in: Capsule())
+                    .shadow(color: Color.accentColor.opacity(0.35), radius: 6, y: 3)
             }
         }
     }
@@ -100,45 +110,62 @@ struct FirstRunView: View {
 
 // MARK: - Shared slide pieces
 
+/// The active "coaching tip" caption — an accent-tinted bar (reads as live guidance, not disabled).
 private func demoCaption(_ text: String) -> some View {
-    Text(text).font(.subheadline).foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .fixedSize(horizontal: false, vertical: true)
+    HStack(alignment: .top, spacing: 10) {
+        RoundedRectangle(cornerRadius: 2).fill(Color.accentColor).frame(width: 3)
+        Text(text)
+            .font(.callout.weight(.medium)).foregroundStyle(.primary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+    .padding(.vertical, 11).padding(.horizontal, 13)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
 }
 
-/// A collapsed month row (chevron + label, optional "new" badge).
+/// A small timeline year label.
+private func yearLabel(_ year: String) -> some View {
+    Text(year)
+        .font(.system(.subheadline, design: .rounded)).fontWeight(.heavy)
+        .foregroundStyle(.secondary)
+}
+
+/// A collapsed month row (chevron + label, optional "new" badge) — elevated card.
 private struct CollapsedMonthCard: View {
     let label: String
     var isNew = false
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
-            Text(label).font(.subheadline).bold()
+        HStack(spacing: 10) {
+            Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(Color.accentColor)
+            Text(label).font(.subheadline.weight(.semibold))
             if isNew {
-                Text("new").font(.caption2).foregroundStyle(.white)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
+                Text("new").font(.caption2.weight(.bold)).foregroundStyle(.white)
+                    .padding(.horizontal, 7).padding(.vertical, 2)
                     .background(Color.accentColor, in: Capsule())
             }
             Spacer()
         }
-        .padding(10)
-        .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 14).padding(.vertical, 13)
+        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.primary.opacity(0.05), lineWidth: 1))
+        .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
     }
 }
 
-/// The dashed "🙈 Hidden · <month>" shelf — names a filed month so the return never looks
-/// resurrected.
+/// The dashed "🙈 Hidden · <month>" shelf — a warm amber tint so a filed month reads as tucked
+/// away (never resurrected).
 private struct HiddenShelf: View {
     let month: String
     var body: some View {
-        HStack {
-            Text("🙈 Hidden · \(month)").font(.caption).foregroundStyle(.secondary)
+        HStack(spacing: 6) {
+            Text("🙈 Hidden · \(month)").font(.subheadline.weight(.medium)).foregroundStyle(.orange)
             Spacer()
         }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(Color.secondary.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color.orange.opacity(0.10)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(Color.orange.opacity(0.45), style: StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
         )
     }
 }
@@ -149,16 +176,16 @@ private struct BacklogSlide: View {
     @State private var appear = false
     private let months = ["March 2024", "April 2024", "May 2024"]
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("2024").font(.headline)
+        VStack(alignment: .leading, spacing: 11) {
+            yearLabel("2024")
             ForEach(Array(months.enumerated()), id: \.offset) { i, m in
                 CollapsedMonthCard(label: m)
                     .opacity(appear ? 1 : 0)
-                    .offset(y: appear ? 0 : 8)
+                    .offset(y: appear ? 0 : 10)
                     .animation(.easeOut(duration: 0.4).delay(Double(i) * 0.15), value: appear)
             }
-            Spacer(minLength: 12)
             demoCaption("Months piling up · years of photos, waiting to be sorted.")
+            Spacer(minLength: 0)
         }
         .onAppear { appear = true }
     }
@@ -168,14 +195,14 @@ private struct BacklogSlide: View {
 
 private struct RemembersSlide: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 11) {
             HiddenShelf(month: "March")
-            Text("2024").font(.headline)
+            yearLabel("2024")
             CollapsedMonthCard(label: "April 2024")
             CollapsedMonthCard(label: "May 2024")
             CollapsedMonthCard(label: "July 2024", isNew: true)
-            Spacer(minLength: 12)
             demoCaption("Come back tomorrow or next month — March stays hidden, and what's new is waiting.")
+            Spacer(minLength: 0)
         }
     }
 }
@@ -190,17 +217,20 @@ private struct RecapSlide: View {
         "You pick up right where you left off, plus what's new.",
     ]
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             Text("Curate once. Stays curated.")
-                .font(.title3).bold().foregroundStyle(.green)
-            ForEach(bullets, id: \.self) { b in
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                    Text(b).font(.subheadline)
+                .font(.system(.title2, design: .rounded)).fontWeight(.bold).foregroundStyle(.green)
+            VStack(alignment: .leading, spacing: 13) {
+                ForEach(bullets, id: \.self) { b in
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                        Text(b).font(.callout)
+                    }
                 }
             }
-            Spacer(minLength: 8)
+            Spacer(minLength: 0)
         }
+        .padding(.top, 6)
     }
 }
 
@@ -209,21 +239,21 @@ private struct RecapSlide: View {
 private struct ReviewHideSlide: View {
     @StateObject private var m = ReviewHideModel()
     @State private var frames: [String: CGRect] = [:]
-    private let cols = Array(repeating: GridItem(.flexible(), spacing: 4), count: 4)
+    private let cols = Array(repeating: GridItem(.flexible(), spacing: 5), count: 4)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 11) {
             if m.hidden {
                 HiddenShelf(month: "March")
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
-            Text("2024").font(.headline)
+            yearLabel("2024")
             if !m.hidden {
                 marchCard.transition(.opacity)
             }
             if m.showGreenBar { greenBar.transition(.opacity) }
-            Spacer(minLength: 6)
             demoCaption(m.caption)
+            Spacer(minLength: 0)
         }
         .coordinateSpace(name: "s1")
         .onPreferenceChange(S1FrameKey.self) { frames = $0 }
@@ -235,26 +265,27 @@ private struct ReviewHideSlide: View {
     }
 
     private var marchCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: "chevron.down").font(.caption).foregroundStyle(.secondary)
-                Text("March 2024").font(.subheadline).bold()
+                Image(systemName: "chevron.down").font(.caption.weight(.bold)).foregroundStyle(Color.accentColor)
+                Text("March 2024").font(.subheadline.weight(.semibold))
                 Spacer()
                 // Hide-month pill is shown from the start so its presence registers.
                 Text("Hide month")
-                    .font(.caption2).foregroundStyle(.white)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .font(.caption.weight(.semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(Color.accentColor, in: Capsule())
                     .s1Frame("pill")
             }
-            LazyVGrid(columns: cols, spacing: 4) {
+            LazyVGrid(columns: cols, spacing: 5) {
                 ForEach(Array(m.tiles.enumerated()), id: \.element.id) { i, tile in
                     ZStack {
-                        RoundedRectangle(cornerRadius: 6).fill(tile.color)
+                        RoundedRectangle(cornerRadius: 8).fill(tile.color)
                         Text(tile.emoji).font(.title3)
                         if tile.selected {
-                            RoundedRectangle(cornerRadius: 6).stroke(.red, lineWidth: 3)
+                            RoundedRectangle(cornerRadius: 8).stroke(.red, lineWidth: 3)
                             Image(systemName: "checkmark.circle.fill").foregroundStyle(.white)
+                                .shadow(color: .black.opacity(0.4), radius: 1)
                         }
                     }
                     .aspectRatio(1, contentMode: .fit)
@@ -265,8 +296,8 @@ private struct ReviewHideSlide: View {
                 HStack {
                     Spacer()
                     Label("Delete", systemImage: "trash")
-                        .font(.caption).foregroundStyle(.white)
-                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .font(.caption.weight(.semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 7)
                         .background(.red, in: Capsule())
                         .s1Frame("delete")
                     Spacer()
@@ -274,21 +305,23 @@ private struct ReviewHideSlide: View {
                 .transition(.opacity)
             }
         }
-        .padding(10)
-        .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+        .padding(14)
+        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.primary.opacity(0.05), lineWidth: 1))
+        .shadow(color: .black.opacity(0.06), radius: 4, y: 2)
         .animation(.easeInOut(duration: 0.25), value: m.anySelected)
     }
 
     private var greenBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Image(systemName: "checkmark.shield.fill").foregroundStyle(.green)
             Text("Hidden only in this app — never deleted, still in your gallery.")
-                .font(.caption).foregroundStyle(.green)
+                .font(.callout.weight(.medium)).foregroundStyle(.green)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(10)
+        .padding(.horizontal, 13).padding(.vertical, 11)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+        .background(Color.green.opacity(0.13), in: RoundedRectangle(cornerRadius: 12))
     }
 
     @ViewBuilder private var finger: some View {
