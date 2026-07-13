@@ -38,6 +38,7 @@ final class DuplicatesViewModel: ObservableObject {
                     byHash[h, default: []].append(item)
                 }
             }
+            await hashStore.flush()   // persist the tail of this pass
             indexedCount = await hashStore.count()
 
             // Build groups of 2+; pre-select the largest copy as the one to KEEP.

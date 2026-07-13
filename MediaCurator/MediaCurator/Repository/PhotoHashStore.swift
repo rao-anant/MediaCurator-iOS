@@ -13,6 +13,11 @@ actor PhotoHashStore {
     private struct Entry: Codable { let size: Int64; let hash: String }
     private var cache: [String: Entry] = [:]
     private var loaded = false
+    /// New hashes since the last disk write. We persist every `flushEvery` so a background
+    /// kill loses at most that many (which just get recomputed on resume) — instead of rewriting
+    /// the whole cache on every single item (O(n²) for a big library). Mirrors Android's 20–50.
+    private var sinceFlush = 0
+    private let flushEvery = 25
 
     private var fileURL: URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -38,6 +43,12 @@ actor PhotoHashStore {
     /// Number of cached entries (for the "N files indexed" subtitle).
     func count() -> Int { cache.count }
 
+    /// Force-write any pending hashes to disk (call when a hashing pass finishes).
+    func flush() {
+        guard sinceFlush > 0 else { return }
+        persist(); sinceFlush = 0
+    }
+
     /// Return the content hash for an item, computing and caching it on first request.
     /// Returns nil if the bytes can't be read.
     func hash(for item: MediaItem) async -> String? {
@@ -45,7 +56,8 @@ actor PhotoHashStore {
         if let e = cache[item.id], e.size == item.size { return e.hash }
         guard let h = await Self.computeHash(localIdentifier: item.localIdentifier) else { return nil }
         cache[item.id] = Entry(size: item.size, hash: h)
-        persist()
+        sinceFlush += 1
+        if sinceFlush >= flushEvery { persist(); sinceFlush = 0 }
         return h
     }
 

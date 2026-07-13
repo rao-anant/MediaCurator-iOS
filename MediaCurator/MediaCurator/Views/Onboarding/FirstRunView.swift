@@ -28,6 +28,10 @@ struct FirstRunView: View {
                 }
                 navRow
             }
+            // Cap to a phone-width column and center it, so on iPad the deck doesn't stretch
+            // full-width (which blew the tile grid up huge and pushed Delete / caption / Back
+            // off the bottom). On iPhone this is wider than the screen, so it's a no-op there.
+            .frame(maxWidth: 500)
             .padding()
 
             // Replay mode only: dismiss anytime. (First run is mandatory until the last slide.)
