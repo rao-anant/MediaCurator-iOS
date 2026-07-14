@@ -16,6 +16,8 @@ struct MediaCuratorApp: App {
         // On a fresh install, restore durable state (hidden months, curation flags, lifetime
         // cleaned-up totals, demo opt-out) from the keychain, which survives reinstall (FR-2).
         PreferencesManager().restoreDurableStateIfFreshInstall()
+        // Register the background place-indexing task (must happen before launch finishes).
+        BackgroundIndexer.register()
     }
 
     var body: some Scene {
@@ -25,7 +27,11 @@ struct MediaCuratorApp: App {
         // Snapshot durable state to the keychain when leaving the foreground, so the latest
         // hidden-months / curation state is captured before any future uninstall.
         .onChange(of: scenePhase) { phase in
-            if phase == .background { prefs.backupDurableState() }
+            if phase == .background {
+                prefs.backupDurableState()
+                // Let iOS finish place indexing later while idle + on power.
+                BackgroundIndexer.schedule()
+            }
         }
     }
 }
