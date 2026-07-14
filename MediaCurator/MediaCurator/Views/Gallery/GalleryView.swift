@@ -141,7 +141,8 @@ struct GalleryView: View {
             }
         }
         .fullScreenCover(item: $selectedItem) { item in
-            MediaViewerView(vm: vm, startingID: item.id)
+            // Gallery: page only within the opened photo's month (spec / Android behavior).
+            MediaViewerView(vm: vm, startingID: item.id, monthScoped: true)
         }
     }
 

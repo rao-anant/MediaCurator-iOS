@@ -8,6 +8,11 @@ struct MediaViewerView: View {
 
     @ObservedObject var vm: GalleryViewModel
     let startingID: String
+    /// When true, paging is limited to the opened photo's month (gallery behavior — you can't
+    /// swipe left past the first or right past the last photo of the month). The place / hidden /
+    /// search viewers seed the vm with exactly the items to show, so they page the whole seeded
+    /// list (monthScoped = false).
+    var monthScoped: Bool = false
 
     @Environment(\.dismiss) private var dismiss
     @State private var currentID: String
@@ -15,14 +20,31 @@ struct MediaViewerView: View {
     /// When an undo restores an item, jump the pager back to it once it reappears.
     @State private var returnToID: String? = nil
     @State private var lastDeletedID: String? = nil
+    /// Year+month to page within (nil = page all of `vm.flatMediaItems`).
+    @State private var scopeYM: DateComponents?
 
-    init(vm: GalleryViewModel, startingID: String) {
+    init(vm: GalleryViewModel, startingID: String, monthScoped: Bool = false) {
         self.vm = vm
         self.startingID = startingID
+        self.monthScoped = monthScoped
         _currentID = State(initialValue: startingID)
+        if monthScoped, let start = vm.flatMediaItems.first(where: { $0.id == startingID }) {
+            _scopeYM = State(initialValue: Calendar.current.dateComponents([.year, .month], from: start.dateTaken))
+        } else {
+            _scopeYM = State(initialValue: nil)
+        }
     }
 
-    private var items: [MediaItem] { vm.flatMediaItems }
+    /// The pageable items — the whole seeded list, or just the opened photo's month (gallery).
+    /// A paged TabView doesn't wrap, so scoping to the month gives the "stops at the ends" behavior.
+    private var items: [MediaItem] {
+        guard let ym = scopeYM else { return vm.flatMediaItems }
+        let cal = Calendar.current
+        return vm.flatMediaItems.filter {
+            let c = cal.dateComponents([.year, .month], from: $0.dateTaken)
+            return c.year == ym.year && c.month == ym.month
+        }
+    }
 
     var body: some View {
         ZStack {
