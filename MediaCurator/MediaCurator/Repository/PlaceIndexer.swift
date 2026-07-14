@@ -34,36 +34,44 @@ actor PlaceIndexer {
         await PlaceStore.shared.ensureLoaded()
         guard let geo = loadGeoIfNeeded() else { return 0 }
 
-        // Only photos we haven't scanned yet (id+size).
-        var todo: [MediaItem] = []
-        for item in items where item.type == .image {
-            if await PlaceStore.shared.hasEntry(id: item.id, size: item.size) == false {
-                todo.append(item)
-            }
-        }
+        // Only photos we haven't scanned yet (id+size) — filtered in one actor hop.
+        let images = items.filter { $0.type == .image }
+        let todo = await PlaceStore.shared.pending(images)
         let total = todo.count
         guard total > 0 else { return await PlaceStore.shared.locatedCount() }
+
+        // Read every asset's GPS location in ONE Photos fetch instead of one fetch per photo —
+        // by far the dominant cost for a large library.
+        let locations = Self.locations(for: todo.map(\.localIdentifier))
 
         var done = 0
         for item in todo {
             if Task.isCancelled { break }
-            let city = Self.location(for: item.localIdentifier).map { loc in
+            let city = locations[item.localIdentifier].map { loc in
                 geo.nearest(lat: loc.coordinate.latitude, lon: loc.coordinate.longitude)
             } ?? nil
             await PlaceStore.shared.save(id: item.id, size: item.size, city: city)
             done += 1
             if done % 50 == 0 { await PlaceStore.shared.flush() }
-            let d = done
-            await MainActor.run { progress(d, total) }
+            // Throttle progress UI updates (every 25) — no main-actor hop per item.
+            if done % 25 == 0 || done == total {
+                let d = done
+                await MainActor.run { progress(d, total) }
+            }
         }
         await PlaceStore.shared.flush()
         return await PlaceStore.shared.locatedCount()
     }
 
-    /// The GPS location of an asset (nil if none / no GPS). `PHAsset.location` is available under
-    /// normal Photos access on iOS — no extra permission (spec §7 iOS note).
-    private static func location(for localIdentifier: String) -> CLLocation? {
-        let result = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil)
-        return result.firstObject?.location
+    /// GPS locations for many assets in a single Photos fetch (no-GPS / missing assets are simply
+    /// absent from the map). `PHAsset.location` needs no extra permission (spec §7 iOS note).
+    private static func locations(for ids: [String]) -> [String: CLLocation] {
+        guard !ids.isEmpty else { return [:] }
+        var out: [String: CLLocation] = [:]
+        let result = PHAsset.fetchAssets(withLocalIdentifiers: ids, options: nil)
+        result.enumerateObjects { asset, _, _ in
+            if let loc = asset.location { out[asset.localIdentifier] = loc }
+        }
+        return out
     }
 }

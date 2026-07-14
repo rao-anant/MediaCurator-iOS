@@ -36,17 +36,21 @@ struct PhotoZoomView: View {
                                         lastScale = 1; lastOffset = .zero
                                     }
                                 }
-                                .simultaneously(with:
-                                    DragGesture()
-                                        .onChanged { value in
-                                            guard scale > 1 else { return }
-                                            offset = CGSize(
-                                                width:  lastOffset.width  + value.translation.width,
-                                                height: lastOffset.height + value.translation.height
-                                            )
-                                        }
-                                        .onEnded { _ in lastOffset = offset }
-                                )
+                        )
+                        // Pan ONLY when zoomed in. At 1x this drag gesture is disabled (`.none`) so
+                        // the parent paging TabView receives the horizontal swipe. Previously the
+                        // drag was always attached and swallowed the swipe, so you could never page
+                        // to the next / previous photo.
+                        .highPriorityGesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    offset = CGSize(
+                                        width:  lastOffset.width  + value.translation.width,
+                                        height: lastOffset.height + value.translation.height
+                                    )
+                                }
+                                .onEnded { _ in lastOffset = offset },
+                            including: scale > 1 ? .all : .none
                         )
                         .onTapGesture(count: 2) {
                             withAnimation(.spring) {

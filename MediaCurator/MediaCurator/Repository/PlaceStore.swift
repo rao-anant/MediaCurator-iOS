@@ -34,6 +34,12 @@ actor PlaceStore {
 
     func hasEntry(id: String, size: Int64) -> Bool { cache[id]?.size == size }
 
+    /// The subset of `items` not yet scanned at their current size — computed in ONE actor hop
+    /// instead of calling `hasEntry` per item.
+    func pending(_ items: [MediaItem]) -> [MediaItem] {
+        items.filter { cache[$0.id]?.size != $0.size }
+    }
+
     func save(id: String, size: Int64, city: GeoCity?) {
         cache[id] = (size, Self.encode(city))
     }
