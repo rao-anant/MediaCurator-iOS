@@ -23,6 +23,12 @@ final class StatsViewModel: ObservableObject {
             isLoading = true
             defer { isLoading = false }
 
+            // Publish the lifetime "cleaned up" totals up front — they're instant UserDefaults
+            // reads, so there's no reason to make them wait behind the media scan (which flashed a
+            // stale 0 until the scan finished).
+            cleanedUpCount = deletionStats.totalDeleted
+            cleanedUpBytes = deletionStats.totalBytesFreed
+
             let media = await MediaCache.shared.get(repo: repo)
             let done  = prefs.getDoneMonths()
             let cal   = Calendar.current
@@ -51,9 +57,6 @@ final class StatsViewModel: ObservableObject {
                 visiblePdfBytes:   d.vB, hiddenPdfBytes:   d.hB,
                 visibleAudioBytes: a.vB, hiddenAudioBytes:  a.hB
             )
-
-            cleanedUpCount = deletionStats.totalDeleted
-            cleanedUpBytes = deletionStats.totalBytesFreed
 
             let liveIDs = Set(media.map(\.id))
             let staged  = prefs.getStagedForDeletion().intersection(liveIDs)

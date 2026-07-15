@@ -18,12 +18,20 @@ struct GalleryView: View {
     @State private var viewportWidth: CGFloat = 0
     @Environment(\.displayScale) private var displayScale
 
-    /// Pixel size to request each thumbnail at — the cell's point width (viewport ÷ 4 columns)
-    /// times the screen scale. Computed once from the stable viewport width so the request key
+    /// Only videos are showing — give them bigger tiles (fewer columns). Videos are usually
+    /// fewer and read better larger; a 4-wide grid of video thumbnails looks busy.
+    private var videoOnly: Bool {
+        vm.includeVideo && !vm.includePhoto && !vm.includePdf && !vm.includeAudio
+    }
+    /// Columns in the gallery grid: 3 for a video-only view, 4 otherwise.
+    private var columnCount: Int { videoOnly ? 3 : 4 }
+
+    /// Pixel size to request each thumbnail at — the cell's point width (viewport ÷ column count)
+    /// times the screen scale. Computed from the stable viewport width so the request key
     /// doesn't change during a month's expand animation (which caused thumbnails to flicker).
     private var cellTargetPx: CGFloat {
         let w = viewportWidth > 0 ? viewportWidth : 400
-        return max(240, (w / 4) * displayScale)
+        return max(240, (w / CGFloat(columnCount)) * displayScale)
     }
 
     /// Sticky context (spec §3): the year always, the month when scrolled into one. Derived from
@@ -141,8 +149,11 @@ struct GalleryView: View {
             }
         }
         .fullScreenCover(item: $selectedItem) { item in
-            // Gallery: page only within the opened photo's month (spec / Android behavior).
-            MediaViewerView(vm: vm, startingID: item.id, monthScoped: true)
+            // Gallery: page only within the opened photo's month (spec / Android behavior) — EXCEPT
+            // in flat "Largest files" sort, which isn't grouped by month. There, month-scoping would
+            // trap paging/deletion inside one month while the next-largest items sit in other months
+            // (looked "stuck"); page the whole flat list instead.
+            MediaViewerView(vm: vm, startingID: item.id, monthScoped: vm.sortMode != .sizeAbsolute)
         }
     }
 
@@ -314,7 +325,7 @@ struct GalleryView: View {
 
     // MARK: - Gallery content
 
-    private let gridColumns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 4)
+    private var gridColumns: [GridItem] { Array(repeating: GridItem(.flexible(), spacing: 2), count: columnCount) }
 
     /// Centered empty-state message when the gallery has no rows (spec §3).
     private var galleryEmptyMessage: String? {

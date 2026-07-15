@@ -21,6 +21,15 @@ actor MediaCache {
     /// Drop cache so the next `get` refetches (call after mutations).
     func invalidate() { cached = nil }
 
+    /// Remove specific items from the cache in place — e.g. after they're deleted — so the next
+    /// read reflects the removal WITHOUT paying for a full library re-enumeration. Deleting a
+    /// handful of staged items doesn't require rescanning thousands of assets; a full `invalidate`
+    /// there made every screen (Home trash card, Stats, By City) block on a slow refetch.
+    func remove(ids: Set<String>) {
+        guard cached != nil else { return }
+        cached?.removeAll { ids.contains($0.id) }
+    }
+
     /// Cached count without triggering a scan; -1 if nothing cached yet.
     var peekSize: Int { cached?.count ?? -1 }
 }

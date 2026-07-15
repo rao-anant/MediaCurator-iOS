@@ -19,18 +19,32 @@ final class MediaRepository {
         let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         guard status == .authorized || status == .limited else { return [] }
 
+        // Load the size/filename cache once up front so the per-asset loop below is a plain
+        // dictionary hit for known assets — avoiding a synchronous PhotoKit lookup per item, which
+        // at scale stalls PhotoKit and trips the background watchdog. New assets are collected and
+        // persisted after the scan.
+        let metaCache = AssetMetaStore.shared.snapshot()
+
         return await Task.detached(priority: .userInitiated) {
             var items: [MediaItem] = []
+            var newMeta: [String: AssetMetaStore.Meta] = [:]
 
             let imagesFetch = PHAsset.fetchAssets(with: .image, options: Self.fetchOptions())
             let videoFetch  = PHAsset.fetchAssets(with: .video, options: Self.fetchOptions())
 
             imagesFetch.enumerateObjects { asset, _, _ in
-                if let item = Self.mediaItem(from: asset, type: .image) { items.append(item) }
+                if let (item, fresh) = Self.mediaItem(from: asset, type: .image, cache: metaCache) {
+                    items.append(item)
+                    if let fresh { newMeta[asset.localIdentifier] = fresh }
+                }
             }
             videoFetch.enumerateObjects { asset, _, _ in
-                if let item = Self.mediaItem(from: asset, type: .video) { items.append(item) }
+                if let (item, fresh) = Self.mediaItem(from: asset, type: .video, cache: metaCache) {
+                    items.append(item)
+                    if let fresh { newMeta[asset.localIdentifier] = fresh }
+                }
             }
+            AssetMetaStore.shared.merge(newMeta)
 
             // Deduplicate by (displayName, size) — same strategy as Android
             let seen = NSMutableSet()
@@ -87,21 +101,36 @@ final class MediaRepository {
         return opts
     }
 
-    private static func mediaItem(from asset: PHAsset, type: MediaType) -> MediaItem? {
-        // The PHAssetResource lookup is best-effort: it can be empty for some assets
-        // (e.g. simulator-imported media). We must NOT drop the asset in that case —
-        // fall back to identifier-derived values so every asset is still surfaced.
-        let resource = PHAssetResource.assetResources(for: asset).first
+    /// Builds a `MediaItem` for an asset. Returns the item plus, when the asset's size/filename had
+    /// to be looked up fresh (cache miss), the `Meta` to persist — nil `fresh` means it was served
+    /// from cache and nothing new needs saving.
+    private static func mediaItem(from asset: PHAsset, type: MediaType,
+                                  cache: [String: AssetMetaStore.Meta]) -> (MediaItem, AssetMetaStore.Meta?)? {
+        let id = asset.localIdentifier
+        let size: Int64
+        let name: String
+        var fresh: AssetMetaStore.Meta? = nil
+
+        if let cached = cache[id] {
+            size = cached.size
+            name = cached.filename
+        } else {
+            // The PHAssetResource lookup is best-effort: it can be empty for some assets
+            // (e.g. simulator-imported media). We must NOT drop the asset in that case —
+            // fall back to identifier-derived values so every asset is still surfaced.
+            let resource = PHAssetResource.assetResources(for: asset).first
+            size = (resource?.value(forKey: "fileSize") as? Int64) ?? 0
+            name = resource?.originalFilename
+                ?? String(asset.localIdentifier.prefix(8)) + (type == .video ? ".mov" : ".jpg")
+            fresh = AssetMetaStore.Meta(size: size, filename: name)
+        }
 
         let dateTaken = asset.creationDate ?? asset.modificationDate ?? Date()
-        let size      = (resource?.value(forKey: "fileSize") as? Int64) ?? 0
-        let name      = resource?.originalFilename
-            ?? String(asset.localIdentifier.prefix(8)) + (type == .video ? ".mov" : ".jpg")
 
         // Best-effort relative-path hint; we mostly care about detecting "whatsapp".
         let relativePath = name.localizedCaseInsensitiveContains("whatsapp") ? "WhatsApp/" : ""
 
-        return MediaItem(
+        return (MediaItem(
             id: asset.localIdentifier,
             localIdentifier: asset.localIdentifier,
             dateTaken: dateTaken,
@@ -110,6 +139,6 @@ final class MediaRepository {
             type: type,
             duration: asset.duration,
             relativePath: relativePath
-        )
+        ), fresh)
     }
 }

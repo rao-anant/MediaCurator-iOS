@@ -24,7 +24,11 @@ final class DuplicatesViewModel: ObservableObject {
             isComputing = true
             defer { isComputing = false; progress = nil }
 
-            let media = await MediaCache.shared.get(repo: repo)
+            // Force a fresh library scan: "Find duplicates" is an explicit user action, and the
+            // library may have changed (new/duplicated photos) since the cache was last filled by
+            // another screen — reusing a stale cache made this report "no duplicates" without
+            // rescanning. Hashes stay cached in PhotoHashStore, so only new items get hashed.
+            let media = await MediaCache.shared.get(repo: repo, forceRefresh: true)
             // Only photos/videos have content hashes worth comparing here.
             let staged = prefs.getStagedForDeletion()
             let candidates = media.filter {

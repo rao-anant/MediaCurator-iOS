@@ -65,6 +65,8 @@ final class TrashViewModel: ObservableObject {
         // Record lifetime "cleaned up" stats (spec §9).
         deletionStats.record(count: result.count, bytes: toDelete.reduce(0) { $0 + $1.size })
         items = []
-        await MediaCache.shared.invalidate()
+        // Drop just the deleted items from the shared cache in place, so Home's trash card, Stats,
+        // and By City reflect the change immediately instead of blocking on a full library rescan.
+        await MediaCache.shared.remove(ids: Set(toDelete.map(\.id)))
     }
 }
