@@ -375,10 +375,13 @@ final class GalleryViewModel: ObservableObject {
 
     /// A request to scroll a just-expanded row to the top (spec §3 Landing / G-5, G-6).
     /// The token makes re-expanding the same row retrigger the onChange.
-    struct ScrollRequest: Equatable { let id: String; let token: UUID }
+    /// `belowSticky` = land the target just under the floating sticky bar (used only when opening a
+    /// month, so its sub-header + first row clear the bar). For collapses and year-open we land at
+    /// the true top instead, so the sticky bar shows the row the user acted on — not the one above it.
+    struct ScrollRequest: Equatable { let id: String; let token: UUID; let belowSticky: Bool }
     @Published var scrollRequest: ScrollRequest? = nil
-    private func requestScroll(toID id: String) {
-        scrollRequest = ScrollRequest(id: id, token: UUID())
+    private func requestScroll(toID id: String, belowSticky: Bool = false) {
+        scrollRequest = ScrollRequest(id: id, token: UUID(), belowSticky: belowSticky)
     }
 
     private var walk = WalkLatch()
@@ -405,7 +408,8 @@ final class GalleryViewModel: ObservableObject {
             walk.opened(key)   // begin a fresh walk (nothing seen yet)
             prefs.setLastViewedMonth(key)   // "pick up where you left off" resume target
             prefs.saveExpandedSubGroups(expandedSubGroups)
-            requestScroll(toID: "month-\(key)")   // land the opened month at the top (§3)
+            // Opening a month: land it below the sticky bar so its sub-header + first row are visible.
+            requestScroll(toID: "month-\(key)", belowSticky: true)
         }
         prefs.saveExpandedMonths(expandedMonths)
         structuralVersion += 1

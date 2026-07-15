@@ -438,9 +438,10 @@ struct GalleryView: View {
                 // position. Nudge it a few times across the settle window — once the target is at
                 // the top the later calls are no-ops, so it lands reliably without visible jank.
                 guard let req else { return }
+                let anchor: UnitPoint = req.belowSticky ? belowStickyAnchor : .top
                 for delay in [0.05, 0.2, 0.4, 0.65] {
                     DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                        withAnimation(.easeInOut(duration: 0.2)) { proxy.scrollTo(req.id, anchor: belowStickyAnchor) }
+                        withAnimation(.easeInOut(duration: 0.2)) { proxy.scrollTo(req.id, anchor: anchor) }
                     }
                 }
             }
