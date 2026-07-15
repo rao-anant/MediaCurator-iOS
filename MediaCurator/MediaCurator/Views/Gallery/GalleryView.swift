@@ -16,12 +16,25 @@ struct GalleryView: View {
     @State private var headerPositions: [String: CGFloat] = [:]
     @State private var viewportHeight: CGFloat = 0
     @State private var viewportWidth: CGFloat = 0
+    /// Measured height of the floating sticky header, so scroll-to lands targets just BELOW it
+    /// instead of behind it (which hid the month's sub-header + first row — see ph1/ph2).
+    @State private var stickyHeight: CGFloat = 0
     @Environment(\.displayScale) private var displayScale
 
+    /// Anchor that lands a scroll target just below the sticky header overlay. The sticky bar
+    /// floats over the scroll content, so `.top` (y=0) hides the target under it; offsetting by the
+    /// bar's fraction of the viewport drops the target into view beneath it.
+    private var belowStickyAnchor: UnitPoint {
+        let h = viewportHeight > 0 ? viewportHeight : 700
+        return UnitPoint(x: 0.5, y: min(0.4, (stickyHeight + 4) / h))
+    }
+
     /// Only videos are showing — give them bigger tiles (fewer columns). Videos are usually
-    /// fewer and read better larger; a 4-wide grid of video thumbnails looks busy.
+    /// fewer and read better larger; a 4-wide grid of video thumbnails looks busy. Based on what's
+    /// actually displayed (not the include flags, which default to on for PDF/audio even when the
+    /// library has none, so those would wrongly keep this false).
     private var videoOnly: Bool {
-        vm.includeVideo && !vm.includePhoto && !vm.includePdf && !vm.includeAudio
+        !vm.flatMediaItems.isEmpty && vm.flatMediaItems.allSatisfy { $0.type == .video }
     }
     /// Columns in the gallery grid: 3 for a video-only view, 4 otherwise.
     private var columnCount: Int { videoOnly ? 3 : 4 }
@@ -407,10 +420,16 @@ struct GalleryView: View {
                                      .onChange(of: g.size.height) { viewportHeight = $0 }
                                      .onChange(of: g.size.width) { viewportWidth = $0 }
             })
-            .overlay(alignment: .top) { stickyHeader }
+            .overlay(alignment: .top) {
+                stickyHeader
+                    .background(GeometryReader { g in
+                        Color.clear.onAppear { stickyHeight = g.size.height }
+                                   .onChange(of: g.size.height) { stickyHeight = $0 }
+                    })
+            }
             .refreshable { vm.loadMedia(forceRefresh: true) }
             .onChange(of: scrollToMonthKey) { key in
-                if let key { withAnimation { proxy.scrollTo("month-\(key)", anchor: .top) } }
+                if let key { withAnimation { proxy.scrollTo("month-\(key)", anchor: belowStickyAnchor) } }
             }
             .onChange(of: vm.scrollRequest) { req in
                 // Opening a year / month / sub-group lands it at the top (§3 Landing, G-5/G-6).
@@ -421,7 +440,7 @@ struct GalleryView: View {
                 guard let req else { return }
                 for delay in [0.05, 0.2, 0.4, 0.65] {
                     DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                        withAnimation(.easeInOut(duration: 0.2)) { proxy.scrollTo(req.id, anchor: .top) }
+                        withAnimation(.easeInOut(duration: 0.2)) { proxy.scrollTo(req.id, anchor: belowStickyAnchor) }
                     }
                 }
             }

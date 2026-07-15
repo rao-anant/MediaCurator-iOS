@@ -46,12 +46,15 @@ final class MediaRepository {
             }
             AssetMetaStore.shared.merge(newMeta)
 
-            // Deduplicate by (displayName, size) — same strategy as Android
+            // Deduplicate by asset identity (localIdentifier) only — NOT by (name, size). Two real
+            // duplicate photos share a name and size but are distinct assets; keying on (name, size)
+            // silently dropped one of every exact-duplicate pair, so the Duplicates feature could
+            // never find them. localIdentifier is unique per asset, so this just guards against the
+            // same asset appearing twice while keeping genuine duplicates in the list.
             let seen = NSMutableSet()
             let deduped = items.filter { item in
-                let key = "\(item.displayName)_\(item.size)"
-                if seen.contains(key) { return false }
-                seen.add(key)
+                if seen.contains(item.id) { return false }
+                seen.add(item.id)
                 return true
             }
 

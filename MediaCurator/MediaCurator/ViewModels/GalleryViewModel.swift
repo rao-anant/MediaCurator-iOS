@@ -340,7 +340,18 @@ final class GalleryViewModel: ObservableObject {
     // MARK: - Expand / Collapse
 
     func toggleYearExpansion(_ year: Int) {
-        if expandedYears.contains(year) { expandedYears.remove(year) }
+        if expandedYears.contains(year) {
+            expandedYears.remove(year)
+            // Collapsing a year closes any open month inside it — otherwise the sticky bar and the
+            // "Hide {month}" bar kept showing that now-hidden month while the list was elsewhere (ph4).
+            if let open = openMonthKey, open.hasPrefix(String(year)) {
+                openMonthKey = nil
+                expandedMonths.remove(open)
+                hideBarState = .none
+            }
+            // Keep the just-closed year in view instead of letting it drift above the top (ph4).
+            requestScroll(toID: "year-\(year)")
+        }
         else {
             expandedYears.insert(year)
             requestScroll(toID: "year-\(year)")   // land the opened year at the very top (§3)
@@ -382,6 +393,9 @@ final class GalleryViewModel: ObservableObject {
             expandedMonths.remove(key)
             openMonthKey = nil
             hideBarState = .none
+            // Keep the month the user just closed in view — collapsing removed its photos, which
+            // otherwise let the header drift above the top of the screen (see ph4).
+            requestScroll(toID: "month-\(key)")
         } else {
             // Accordion: only one month open at a time. Opening a month collapses the
             // previously open month and all sub-group expansions (spec §3).
