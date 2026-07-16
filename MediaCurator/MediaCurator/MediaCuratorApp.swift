@@ -29,6 +29,9 @@ struct MediaCuratorApp: App {
         .onChange(of: scenePhase) { phase in
             if phase == .background {
                 prefs.backupDurableState()
+                // Stop foreground hashing so no large PhotoKit read is in flight during the
+                // scene-update transition (the b22 watchdog cause). It resumes when Home reloads.
+                HashingCoordinator.shared.cancel()
                 // Let iOS finish place indexing later while idle + on power.
                 BackgroundIndexer.schedule()
             }

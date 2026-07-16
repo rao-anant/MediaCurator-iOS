@@ -177,12 +177,23 @@ struct GalleryView: View {
         if let year = stickyYear, !vm.selectionMode {
             VStack(spacing: 0) {
                 Button {
-                    if let y = Int(year) { vm.toggleYearExpansion(y) }
+                    // Collapse ONE level, like the geo drill (close Fremont -> California, not -> US):
+                    // if a month is open, close just it and stay in this year's month list; only when
+                    // no month is open does this collapse the year to the all-years list.
+                    if let key = vm.openMonthKey {
+                        vm.toggleMonthExpansion(key)
+                    } else if let y = Int(year) {
+                        vm.toggleYearExpansion(y)
+                    }
                 } label: {
-                    HStack {
+                    HStack(spacing: 8) {
+                        // Left-side chevron.down matches the in-list tree rows (and Android). It's an
+                        // expanded node you tap to collapse — just pinned here so it stays reachable
+                        // when the real header has scrolled far off the top.
+                        Image(systemName: "chevron.down").font(.caption).foregroundStyle(.secondary)
+                            .frame(width: 16)
                         Text(year).font(.subheadline).bold()
                         Spacer()
-                        Image(systemName: "chevron.up").font(.caption2).foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, 16).padding(.vertical, 6)
                     .background(Color(.systemBackground).opacity(0.96))
@@ -439,7 +450,10 @@ struct GalleryView: View {
                 // the top the later calls are no-ops, so it lands reliably without visible jank.
                 guard let req else { return }
                 let anchor: UnitPoint = req.belowSticky ? belowStickyAnchor : .top
-                for delay in [0.05, 0.2, 0.4, 0.65] {
+                // Nudge across the settle window. The later ticks (1.0/1.4s) re-correct after the
+                // accordion finishes collapsing the other months and the photo grid lays out — that
+                // post-settle shift is what pulled the opened month's sub-header back under the bar.
+                for delay in [0.05, 0.2, 0.4, 0.65, 1.0, 1.4] {
                     DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                         withAnimation(.easeInOut(duration: 0.2)) { proxy.scrollTo(req.id, anchor: anchor) }
                     }

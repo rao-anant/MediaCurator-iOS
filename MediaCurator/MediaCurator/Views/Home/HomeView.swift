@@ -5,9 +5,14 @@ import SwiftUI
 struct HomeView: View {
 
     @StateObject private var vm = HomeViewModel()
+    @ObservedObject private var hashing = HashingCoordinator.shared
     @State private var path = NavigationPath()
     @State private var showingStats = false
     @State private var showDemo = false
+
+    /// Photos are still hashing — the Find-duplicates card is disabled and shows progress until the
+    /// photos finish. Videos hash afterward in the background without blocking the card (Option B).
+    private var photosHashing: Bool { hashing.photosTotal > 0 && !hashing.photosComplete }
 
     private let prefs = PreferencesManager()
     /// The mandatory first-run demo auto-plays once per process (spec §13).
@@ -55,7 +60,12 @@ struct HomeView: View {
                             GridCard(title: "Free up space", subtitle: "Biggest files first", icon: "internaldrive") {
                                 path.append(NavDestination.gallery(monthKey: nil))
                             }
-                            GridCard(title: "Find duplicates", subtitle: state.dupSub, icon: "doc.on.doc") {
+                            GridCard(title: "Find duplicates",
+                                     subtitle: photosHashing
+                                        ? "Hashing photos \(hashing.photosDone)/\(hashing.photosTotal)…"
+                                        : state.dupSub,
+                                     icon: "doc.on.doc",
+                                     disabled: photosHashing) {
                                 path.append(NavDestination.duplicates)
                             }
                         }

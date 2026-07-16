@@ -95,6 +95,12 @@ final class HomeViewModel: ObservableObject {
             built.placeCount = placeCount
             state = built
 
+            // Continuously hash photos+videos in the background so the Duplicates screen is instant.
+            // Serial + cancel-on-background (see HashingCoordinator) keeps it watchdog-safe.
+            if prefs.isPhotoDuplicateDetectionEnabled() {
+                HashingCoordinator.shared.start(items: media)
+            }
+
             // Kick place indexing in the background (offline reverse-geocoding, spec §7) so the
             // location cards light up. Refresh the count when it finishes.
             if prefs.isPlaceSearchEnabled() {

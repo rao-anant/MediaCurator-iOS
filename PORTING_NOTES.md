@@ -28,9 +28,16 @@ paid team `4AK585R8JQ`. Signing/upload is fully headless (see the TestFlight sec
 - **b24** — sub-group/year header rows are fully tappable (whole-row `contentShape`, not a `Button`
   that missed the chevron); only month-*open* lands below the sticky bar — collapse and year-open land
   at the true top so the sticky shows the row acted on.
+- **b25** — **continuous background hashing** (`HashingCoordinator`): photos hashed first (unlock
+  Duplicates) then videos; Home's Find-duplicates card shows "Hashing photos N/M" and is disabled
+  until photos finish (Option B). Serial + cancel-on-background = watchdog-safe. Sticky collapse
+  control: the top-right `chevron.up` became a left-side `chevron.down` matching the in-list tree
+  (functionally it's the always-reachable collapse chevron); it collapses ONE level (month -> that
+  year's months -> all years), like the geo drill. Bug-1 scroll: extra late re-correction ticks so
+  the opened month's sub-header isn't pulled back under the sticky bar after the accordion settles.
 
-Parked: continuous background hashing (#6 — do carefully, folded into the charging-idle background
-task, only after the crash fix is confirmed stable); App Store screenshots + submission.
+Parked: App Store screenshots + submission. See PARITY for Android follow-ups (sticky collapse
+affordance, photos-first hashing UX, and the earlier sticky-scroll / dedupe rows).
 
 ---
 
