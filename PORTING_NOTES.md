@@ -1,7 +1,36 @@
 # MediaCurator iOS — Porting Progress
 
 Living handoff doc for the Android → iOS port. Read this first when resuming.
-Last updated: 2026-06-25.
+Last updated: 2026-07-15.
+
+---
+
+## TestFlight device-QA build log (b18–b24)
+
+On-device testing (real iPhone + iPad, internal TestFlight) surfaced a run of fixes after the
+first TestFlight builds. App name is **GalleryCurator**; bundle id stays `com.anant.MediaCurator`;
+paid team `4AK585R8JQ`. Signing/upload is fully headless (see the TestFlight section below).
+
+- **b21** — background-finish place indexing via `BGProcessingTask` (see PARITY row).
+- **b22** — fixed a **backgrounding crash**: `0x8BADF00D` scene-update watchdog. Full-library scans
+  called `PHAssetResource.assetResources(for:)` per asset (for size/filename); at library scale this
+  saturates PhotoKit's single CoreData context and, on backgrounding, blocks the main thread past the
+  10 s watchdog. Fix: `AssetMetaStore` caches per-asset size/filename so re-scans skip the lookup for
+  known assets. Also: empty-trash no longer forces a full rescan (`MediaCache.remove(ids:)`), Stats
+  reads lifetime totals before the scan (no 0-flash), video-only grid uses 3 tiles, and the viewer
+  pages the whole flat list in "Largest files" sort (month-scoping only applies to month-grouped sorts).
+- **b23** — **Duplicate finder**: the library fetch deduped by `(displayName, size)`, dropping one of
+  every exact-duplicate pair before detection. Now dedupes by `localIdentifier`. (Cross-platform — see
+  PARITY; Android has the same `distinctBy`.) Video-only tile count keyed off displayed content, not the
+  include flags. Gallery scroll: measure the floating sticky bar and land expand targets *below* it;
+  scroll the just-collapsed month/year back into view; close an open month when its year collapses.
+  Baked `ITSAppUsesNonExemptEncryption = NO` into Info.plist so builds skip the Missing-Compliance gate.
+- **b24** — sub-group/year header rows are fully tappable (whole-row `contentShape`, not a `Button`
+  that missed the chevron); only month-*open* lands below the sticky bar — collapse and year-open land
+  at the true top so the sticky shows the row acted on.
+
+Parked: continuous background hashing (#6 — do carefully, folded into the charging-idle background
+task, only after the crash fix is confirmed stable); App Store screenshots + submission.
 
 ---
 
