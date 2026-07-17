@@ -16,17 +16,20 @@ struct GalleryView: View {
     @State private var headerPositions: [String: CGFloat] = [:]
     @State private var viewportHeight: CGFloat = 0
     @State private var viewportWidth: CGFloat = 0
-    /// Measured height of the floating sticky header, so scroll-to lands targets just BELOW it
-    /// instead of behind it (which hid the month's sub-header + first row — see ph1/ph2).
-    @State private var stickyHeight: CGFloat = 0
     @Environment(\.displayScale) private var displayScale
 
     /// Anchor that lands a scroll target just below the sticky header overlay. The sticky bar
     /// floats over the scroll content, so `.top` (y=0) hides the target under it; offsetting by the
     /// bar's fraction of the viewport drops the target into view beneath it.
+    /// Land a month header just below the YEAR bar — the only row that stays pinned above it (once
+    /// the month header is on screen it unpins itself, by design). Deliberately a CONSTANT, not the
+    /// measured bar height: the bar's height now depends on what's pinned, which depends on scroll
+    /// position, which this anchor sets — reading it here closed a feedback loop where each nudge
+    /// recomputed the anchor from a height the previous nudge had just changed, thrashing the scroll
+    /// into nonsense positions (blank screen / a lone year). Mirrors Android's stickyHeaderOffset().
     private var belowStickyAnchor: UnitPoint {
         let h = viewportHeight > 0 ? viewportHeight : 700
-        return UnitPoint(x: 0.5, y: min(0.4, (stickyHeight + 4) / h))
+        return UnitPoint(x: 0.5, y: min(0.4, (stickyYearRowH + 4) / h))
     }
 
     /// Only videos are showing — give them bigger tiles (fewer columns). Videos are usually
@@ -482,13 +485,7 @@ struct GalleryView: View {
                                      .onChange(of: g.size.height) { viewportHeight = $0 }
                                      .onChange(of: g.size.width) { viewportWidth = $0 }
             })
-            .overlay(alignment: .top) {
-                stickyHeader
-                    .background(GeometryReader { g in
-                        Color.clear.onAppear { stickyHeight = g.size.height }
-                                   .onChange(of: g.size.height) { stickyHeight = $0 }
-                    })
-            }
+            .overlay(alignment: .top) { stickyHeader }
             .refreshable { vm.loadMedia(forceRefresh: true) }
             .onChange(of: scrollToMonthKey) { key in
                 if let key { withAnimation { proxy.scrollTo("month-\(key)", anchor: belowStickyAnchor) } }
@@ -501,10 +498,10 @@ struct GalleryView: View {
                 // the top the later calls are no-ops, so it lands reliably without visible jank.
                 guard let req else { return }
                 let anchor: UnitPoint = req.belowSticky ? belowStickyAnchor : .top
-                // Nudge across the settle window. The later ticks (1.0/1.4s) re-correct after the
-                // accordion finishes collapsing the other months and the photo grid lays out — that
-                // post-settle shift is what pulled the opened month's sub-header back under the bar.
-                for delay in [0.05, 0.2, 0.4, 0.65, 1.0, 1.4] {
+                // Nudge across the settle window (the accordion collapses other months and the grid
+                // lays out after the first tick). The anchor is constant, so these converge instead
+                // of chasing a bar height they themselves change.
+                for delay in [0.05, 0.2, 0.4, 0.65] {
                     DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                         withAnimation(.easeInOut(duration: 0.2)) { proxy.scrollTo(req.id, anchor: anchor) }
                     }
