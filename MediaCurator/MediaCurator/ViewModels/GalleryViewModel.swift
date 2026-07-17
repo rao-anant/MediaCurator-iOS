@@ -346,6 +346,7 @@ final class GalleryViewModel: ObservableObject {
             // "Hide {month}" bar kept showing that now-hidden month while the list was elsewhere (ph4).
             if let open = openMonthKey, open.hasPrefix(String(year)) {
                 openMonthKey = nil
+                openSubGroupKey = nil
                 expandedMonths.remove(open)
                 hideBarState = .none
             }
@@ -363,6 +364,16 @@ final class GalleryViewModel: ObservableObject {
 
     /// The single month currently open in the accordion (nil = none). Drives the pinned bar.
     @Published var openMonthKey: String? = nil
+    /// The sub-group currently open inside `openMonthKey` (most recently expanded if both are).
+    /// Drives the pinned sub-group row. Derived from the MODEL, never from on-screen header
+    /// positions: the sub-header lives in a LazyVStack, so scrolling into its photos drops the row
+    /// and any position-derived value would vanish exactly when the pin is needed most.
+    @Published var openSubGroupKey: String? = nil
+    /// Display label for `openSubGroupKey` — the key suffix decides it (":wa" vs ":cam").
+    var openSubGroupLabel: String {
+        guard let k = openSubGroupKey else { return "" }
+        return k.hasSuffix(":wa") ? "WhatsApp" : "Camera & Others"
+    }
     /// Display metrics for the open month, shown in the sticky header (year › month › "N photos · size").
     @Published var openMonthCount = 0
     @Published var openMonthBytes: Int64 = 0
@@ -395,6 +406,7 @@ final class GalleryViewModel: ObservableObject {
         if expandedMonths.contains(key) {
             expandedMonths.remove(key)
             openMonthKey = nil
+            openSubGroupKey = nil
             hideBarState = .none
             // Keep the month the user just closed in view — collapsing removed its photos, which
             // otherwise let the header drift above the top of the screen (see ph4).
@@ -404,6 +416,7 @@ final class GalleryViewModel: ObservableObject {
             // previously open month and all sub-group expansions (spec §3).
             expandedMonths = [key]
             expandedSubGroups.removeAll()
+            openSubGroupKey = nil
             openMonthKey = key
             walk.opened(key)   // begin a fresh walk (nothing seen yet)
             prefs.setLastViewedMonth(key)   // "pick up where you left off" resume target
@@ -513,6 +526,7 @@ final class GalleryViewModel: ObservableObject {
     func toggleSubGroupExpansion(_ key: String) {
         if expandedSubGroups.contains(key) {
             expandedSubGroups.remove(key)
+            if openSubGroupKey == key { openSubGroupKey = expandedSubGroups.first }
             // Collapsing removes every photo the user scrolled past, so without an anchor the list
             // loses its position and dumps them on an unrelated month (the bug Android hit in a33
             // when collapsing from its sticky bar). Land on the parent month so they see that
@@ -522,6 +536,7 @@ final class GalleryViewModel: ObservableObject {
         }
         else {
             expandedSubGroups.insert(key)
+            openSubGroupKey = key   // pins this sub-group's collapse chevron in the sticky bar
             // Mark as "seen" per currently-enabled type: a type counts as reviewed only when
             // the sub-group is opened while that type's filter chip is on. Keys are
             // "<month>:<sub>:<type>", e.g. "2024-03:cam:video". Persisted, grows only.

@@ -72,17 +72,15 @@ struct GalleryView: View {
         return top.key.split(separator: "|").last.map(String.init)
     }
 
-    /// The open sub-group ("Camera & Others" / "WhatsApp") whose header has scrolled to/above the
-    /// top — pinned as a third sticky row so its collapse chevron stays reachable while you scroll
-    /// its photos, instead of disappearing off the top (matches Android's 3-row sticky header).
-    /// Scroll-derived because a month can have BOTH sub-groups expanded at once.
+    /// The open sub-group ("Camera & Others" / "WhatsApp"), pinned as a third sticky row so its
+    /// collapse chevron stays reachable while you scroll its photos (matches Android's 3-row sticky
+    /// header). Derived from the open-sub-group KEY, not header positions — the sub-header sits in a
+    /// LazyVStack, so scrolling into its photos drops the row and a position-derived value would
+    /// vanish exactly when the pin matters (same trap as the month label).
     private var stickySub: (key: String, label: String)? {
-        guard vm.sortMode != .sizeAbsolute, vm.openMonthKey != nil else { return nil }
-        let ss = headerPositions.filter { $0.key.hasPrefix("S:") && $0.value <= 0 }
-        guard let top = ss.max(by: { $0.value < $1.value }) else { return nil }
-        let body = String(top.key.dropFirst(2))          // "<subKey>|<label>"
-        guard let sep = body.firstIndex(of: "|") else { return nil }
-        return (String(body[body.startIndex..<sep]), String(body[body.index(after: sep)...]))
+        guard vm.sortMode != .sizeAbsolute, vm.openMonthKey != nil,
+              let key = vm.openSubGroupKey else { return nil }
+        return (key, vm.openSubGroupLabel)
     }
 
     private func showFilterToast(_ message: String) {
@@ -557,16 +555,6 @@ struct GalleryView: View {
                 })
         case .subHeader(let s):
             SubHeaderRow(sub: s) { vm.toggleSubGroupExpansion(s.subKey) }
-                // Only an EXPANDED sub-group reports its position: that's the one whose collapse
-                // chevron must stay pinned while you scroll its photos (a collapsed sibling has
-                // nothing to pin). Drives `stickySub`.
-                .background(GeometryReader { g in
-                    Color.clear.preference(
-                        key: HeaderPosKey.self,
-                        value: s.isExpanded
-                            ? ["S:\(s.subKey)|\(s.label)": g.frame(in: .named("galleryScroll")).minY]
-                            : [:])
-                })
         case .footer(let f):
             // Thin divider + the open month's bottom anchor for the walk gate. Its position is
             // reported continuously (below) so reaching the true bottom registers reliably.
