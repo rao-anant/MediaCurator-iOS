@@ -57,14 +57,40 @@ struct GalleryView: View {
         guard let top = ys.max(by: { $0.value < $1.value }) else { return nil }
         return String(top.key.dropFirst(2))
     }
+    /// Approximate heights of the pinned rows — used to tell when a real (in-list) header has slid
+    /// behind the bar so its pinned stand-in should take over.
+    private let stickyYearRowH: CGFloat = 34
+    private let stickyMonthRowH: CGFloat = 46
+
+    /// Reported y of a header, or nil when the LazyVStack has dropped it (i.e. it is far off-screen).
+    private func headerY(prefix: String) -> CGFloat? {
+        headerPositions.first { $0.key.hasPrefix(prefix) }?.value
+    }
+
+    /// Pin the open month ONLY while its real in-list header isn't visible below the year bar —
+    /// otherwise "April 2024" shows twice (pinned + in-list). A missing position means the lazy list
+    /// dropped the row, i.e. it's scrolled far away, so we pin. (The pre-existing code had this
+    /// polarity backwards — absent was read as "no month" and the label vanished mid-month, which is
+    /// why it was made unconditional; that caused the duplicate.) Matches Android, whose bar shows
+    /// only the year while the real month header is on screen.
+    private var showStickyMonth: Bool {
+        guard vm.openMonthKey != nil else { return false }
+        guard let y = headerY(prefix: "M:\(vm.openMonthKey!)|") else { return true }
+        return y <= stickyYearRowH
+    }
+
+    /// Same contract for the open sub-group, measured below whatever is pinned above it.
+    private var showStickySub: Bool {
+        guard let key = vm.openSubGroupKey else { return false }
+        let threshold = stickyYearRowH + (showStickyMonth ? stickyMonthRowH : 0)
+        guard let y = headerY(prefix: "S:\(key)") else { return true }
+        return y <= threshold
+    }
+
     private var stickyMonthLabel: String? {
         guard vm.sortMode != .sizeAbsolute else { return nil }
-        // When a month is expanded, always show its label — derived straight from the open-month
-        // key (same source as the Hide bar), NOT from on-screen header positions. In a long month
-        // the month header scrolls off the top and the lazy list drops it, which previously made
-        // the label vanish so only the year showed (see chandrika.jpg).
-        if let open = vm.openMonthKey {
-            return Formatters.monthLabel(from: open)
+        if vm.openMonthKey != nil {
+            return showStickyMonth ? Formatters.monthLabel(from: vm.openMonthKey!) : nil
         }
         guard let year = stickyYear else { return nil }
         let ms = headerPositions.filter { $0.key.hasPrefix("M:\(year)-") && $0.value <= 0 }
@@ -72,14 +98,13 @@ struct GalleryView: View {
         return top.key.split(separator: "|").last.map(String.init)
     }
 
-    /// The open sub-group ("Camera & Others" / "WhatsApp"), pinned as a third sticky row so its
-    /// collapse chevron stays reachable while you scroll its photos (matches Android's 3-row sticky
-    /// header). Derived from the open-sub-group KEY, not header positions — the sub-header sits in a
-    /// LazyVStack, so scrolling into its photos drops the row and a position-derived value would
-    /// vanish exactly when the pin matters (same trap as the month label).
+    /// The open sub-group ("Camera & Others" / "WhatsApp"), pinned so its collapse chevron stays
+    /// reachable while you scroll its photos. WHICH sub-group is model state (`openSubGroupKey`) —
+    /// it must survive the lazy list dropping the row — but WHETHER to pin it is positional, so it
+    /// doesn't duplicate the real row while that's on screen.
     private var stickySub: (key: String, label: String)? {
         guard vm.sortMode != .sizeAbsolute, vm.openMonthKey != nil,
-              let key = vm.openSubGroupKey else { return nil }
+              let key = vm.openSubGroupKey, showStickySub else { return nil }
         return (key, vm.openSubGroupLabel)
     }
 
@@ -555,6 +580,15 @@ struct GalleryView: View {
                 })
         case .subHeader(let s):
             SubHeaderRow(sub: s) { vm.toggleSubGroupExpansion(s.subKey) }
+                // Only an EXPANDED sub-group reports: it's the one that can be pinned, and its
+                // absence (lazy list dropped it) is what tells us to pin. See `showStickySub`.
+                .background(GeometryReader { g in
+                    Color.clear.preference(
+                        key: HeaderPosKey.self,
+                        value: s.isExpanded
+                            ? ["S:\(s.subKey)": g.frame(in: .named("galleryScroll")).minY]
+                            : [:])
+                })
         case .footer(let f):
             // Thin divider + the open month's bottom anchor for the walk gate. Its position is
             // reported continuously (below) so reaching the true bottom registers reliably.
