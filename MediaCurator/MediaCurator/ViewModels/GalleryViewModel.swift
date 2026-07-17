@@ -511,7 +511,15 @@ final class GalleryViewModel: ObservableObject {
     }
 
     func toggleSubGroupExpansion(_ key: String) {
-        if expandedSubGroups.contains(key) { expandedSubGroups.remove(key) }
+        if expandedSubGroups.contains(key) {
+            expandedSubGroups.remove(key)
+            // Collapsing removes every photo the user scrolled past, so without an anchor the list
+            // loses its position and dumps them on an unrelated month (the bug Android hit in a33
+            // when collapsing from its sticky bar). Land on the parent month so they see that
+            // month's sub-group list — Camera & Others + WhatsApp.
+            let parentMonth = String(key.prefix(while: { $0 != ":" }))
+            requestScroll(toID: "month-\(parentMonth)", belowSticky: true)
+        }
         else {
             expandedSubGroups.insert(key)
             // Mark as "seen" per currently-enabled type: a type counts as reviewed only when

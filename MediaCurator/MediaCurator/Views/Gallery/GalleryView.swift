@@ -72,6 +72,19 @@ struct GalleryView: View {
         return top.key.split(separator: "|").last.map(String.init)
     }
 
+    /// The open sub-group ("Camera & Others" / "WhatsApp") whose header has scrolled to/above the
+    /// top — pinned as a third sticky row so its collapse chevron stays reachable while you scroll
+    /// its photos, instead of disappearing off the top (matches Android's 3-row sticky header).
+    /// Scroll-derived because a month can have BOTH sub-groups expanded at once.
+    private var stickySub: (key: String, label: String)? {
+        guard vm.sortMode != .sizeAbsolute, vm.openMonthKey != nil else { return nil }
+        let ss = headerPositions.filter { $0.key.hasPrefix("S:") && $0.value <= 0 }
+        guard let top = ss.max(by: { $0.value < $1.value }) else { return nil }
+        let body = String(top.key.dropFirst(2))          // "<subKey>|<label>"
+        guard let sep = body.firstIndex(of: "|") else { return nil }
+        return (String(body[body.startIndex..<sep]), String(body[body.index(after: sep)...]))
+    }
+
     private func showFilterToast(_ message: String) {
         filterToast = message
         Task {
@@ -176,15 +189,11 @@ struct GalleryView: View {
     private var stickyHeader: some View {
         if let year = stickyYear, !vm.selectionMode {
             VStack(spacing: 0) {
+                // Each pinned row collapses ITS OWN level (matches Android's 3-row sticky header):
+                // year -> all-years list, month -> that year's month list, sub-group -> that month's
+                // Camera & Others + WhatsApp. Tapping the deepest row is therefore "up one level".
                 Button {
-                    // Collapse ONE level, like the geo drill (close Fremont -> California, not -> US):
-                    // if a month is open, close just it and stay in this year's month list; only when
-                    // no month is open does this collapse the year to the all-years list.
-                    if let key = vm.openMonthKey {
-                        vm.toggleMonthExpansion(key)
-                    } else if let y = Int(year) {
-                        vm.toggleYearExpansion(y)
-                    }
+                    if let y = Int(year) { vm.toggleYearExpansion(y) }
                 } label: {
                     HStack(spacing: 8) {
                         // Left-side chevron.down matches the in-list tree rows (and Android). It's an
@@ -204,7 +213,9 @@ struct GalleryView: View {
                         // Collapse the open month if this sticky month is it.
                         if let key = vm.openMonthKey { vm.toggleMonthExpansion(key) }
                     } label: {
-                        HStack {
+                        HStack(spacing: 8) {
+                            Image(systemName: "chevron.down").font(.caption).foregroundStyle(.secondary)
+                                .frame(width: 16)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(month).font(.subheadline).foregroundStyle(.primary)
                                 // Count + size in a smaller font (matches Android's month strip).
@@ -216,6 +227,23 @@ struct GalleryView: View {
                             Spacer()
                         }
                         .padding(.horizontal, 16).padding(.vertical, 4)
+                        .background(Color(.systemBackground).opacity(0.96))
+                    }
+                    .buttonStyle(.plain)
+                }
+                // Third row: the open sub-group, pinned so its collapse chevron stays reachable
+                // while scrolling its photos. Tapping shows that month's Camera & Others + WhatsApp.
+                if let sub = stickySub {
+                    Button {
+                        vm.toggleSubGroupExpansion(sub.key)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "chevron.down").font(.caption).foregroundStyle(.tertiary)
+                                .frame(width: 16)
+                            Text(sub.label).font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 24).padding(.vertical, 4)
                         .background(Color(.systemBackground).opacity(0.96))
                     }
                     .buttonStyle(.plain)
@@ -529,6 +557,16 @@ struct GalleryView: View {
                 })
         case .subHeader(let s):
             SubHeaderRow(sub: s) { vm.toggleSubGroupExpansion(s.subKey) }
+                // Only an EXPANDED sub-group reports its position: that's the one whose collapse
+                // chevron must stay pinned while you scroll its photos (a collapsed sibling has
+                // nothing to pin). Drives `stickySub`.
+                .background(GeometryReader { g in
+                    Color.clear.preference(
+                        key: HeaderPosKey.self,
+                        value: s.isExpanded
+                            ? ["S:\(s.subKey)|\(s.label)": g.frame(in: .named("galleryScroll")).minY]
+                            : [:])
+                })
         case .footer(let f):
             // Thin divider + the open month's bottom anchor for the walk gate. Its position is
             // reported continuously (below) so reaching the true bottom registers reliably.
