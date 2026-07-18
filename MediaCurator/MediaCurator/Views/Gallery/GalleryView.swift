@@ -55,13 +55,30 @@ struct GalleryView: View {
 
     /// Sticky context (spec §3): the year always, the month when scrolled into one. Derived from
     /// the closest header that has scrolled to/above the top. Hidden in flat size-sort mode.
-    private var stickyYear: String? {
+    /// WHICH year the bar is about — model/position derived, and deliberately not gated on
+    /// visibility, because `stickyMonthLabel` needs it as a lookup key even when nothing is pinned.
+    private var stickyYearCandidate: String? {
         guard vm.sortMode != .sizeAbsolute else { return nil }
         // An open month pins its own year (avoids the strip going blank / wrong for short months).
         if let open = vm.openMonthKey { return String(open.prefix(4)) }
         let ys = headerPositions.filter { $0.key.hasPrefix("Y:") && $0.value <= 0 }
         guard let top = ys.max(by: { $0.value < $1.value }) else { return nil }
         return String(top.key.dropFirst(2))
+    }
+
+    /// WHETHER to pin it — same rule the month and sub rows already had, which the year row was
+    /// missing (ph8): pin only while the real in-list year row isn't on screen. The open-month
+    /// branch above returns a year unconditionally, so with a month open the bar pinned "2024" even
+    /// while the real "2024  104  4.2 MB" row sat directly beneath it — the same duplicate-header
+    /// bug fixed for months, never applied here. A dropped position means the lazy list discarded
+    /// the row (scrolled far away), so pin.
+    ///
+    /// Gating the whole bar on this is safe: a year header always sits above its own months, so if
+    /// it's on screen the open month is below it and needs no stand-in either.
+    private var stickyYear: String? {
+        guard let year = stickyYearCandidate else { return nil }
+        if let y = headerY(prefix: "Y:\(year)"), y > 0 { return nil }
+        return year
     }
     /// Approximate heights of the pinned rows — used to tell when a real (in-list) header has slid
     /// behind the bar so its pinned stand-in should take over.
@@ -98,7 +115,9 @@ struct GalleryView: View {
         if vm.openMonthKey != nil {
             return showStickyMonth ? Formatters.monthLabel(from: vm.openMonthKey!) : nil
         }
-        guard let year = stickyYear else { return nil }
+        // Candidate, not the gated `stickyYear`: we still need to know which year's months to scan
+        // even at a scroll position where the year row itself isn't pinned.
+        guard let year = stickyYearCandidate else { return nil }
         let ms = headerPositions.filter { $0.key.hasPrefix("M:\(year)-") && $0.value <= 0 }
         guard let top = ms.max(by: { $0.value < $1.value }) else { return nil }
         return top.key.split(separator: "|").last.map(String.init)

@@ -62,6 +62,17 @@ Android codebase.
 - **Resolution:** iOS now shows an overflow (•••) menu on the Home screen with **Help** and
   **Settings**, matching Android. Not a code bug — noted for parity.
 
+## 6. (iOS-only) Year header rendered twice — bare pinned row above the real one (ph8)
+- **Symptom:** With a month open, the year appeared on two consecutive rows: a bare `2024` (no
+  counts) directly above the real `2024  104  4.2 MB` row. Android shows one row, with details.
+- **Root cause:** The pinned sticky bar had a "pin only while the real in-list row is off screen"
+  rule on its **month** and **sub-group** rows (added when "April 2024 appears twice" was fixed) but
+  never on its **year** row. `stickyYear` short-circuited on `openMonthKey` and returned the year
+  unconditionally, so opening any month pinned a year stand-in even with the real row on screen.
+- **Fix:** Split into `stickyYearCandidate` (which year — still ungated, `stickyMonthLabel` needs it
+  as a lookup key) and `stickyYear` (whether to pin — nil when the real `Y:` row reports y > 0).
+- **Android check:** none needed; Android renders one year row correctly. iOS-only regression.
+
 ---
 
 ### Excluded (iOS/Swift-only — do NOT apply to Android)
