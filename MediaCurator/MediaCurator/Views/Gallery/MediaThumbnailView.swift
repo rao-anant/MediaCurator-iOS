@@ -16,9 +16,37 @@ struct MediaThumbnailView: View {
     var onLongPress: (() -> Void)? = nil
 
     @State private var image: UIImage? = nil
+    /// When the last long press completed. A long press must not also count as a tap: the two used
+    /// to run together (Button + `.simultaneousGesture`), so holding a photo fired `onLongPress`
+    /// AND `onTap` — and when the tap won the race it set `selectedItem` while selection mode was
+    /// still off, presenting the full-screen viewer at the same moment the NavigationStack was
+    /// re-rendering for selection. That combination unwound the stack and dumped the user out of
+    /// the gallery. Timestamp rather than a flag so a long press that never emits a tap can't
+    /// swallow the user's next real one.
+    @State private var lastLongPressAt: Date? = nil
 
     var body: some View {
-        Button(action: onTap) {
+        content
+        // Long press and tap are now mutually exclusive recognizers rather than a Button plus a
+        // simultaneous gesture, so entering selection can never also open the viewer.
+        .onLongPressGesture(minimumDuration: 0.4) {
+            lastLongPressAt = Date()
+            onLongPress?()
+        }
+        .onTapGesture {
+            if let t = lastLongPressAt, Date().timeIntervalSince(t) < 0.6 { return }
+            onTap()
+        }
+        .accessibilityAddTraits(.isButton)   // kept from the Button this replaced
+        // Load once per cell at the parent's stable pixel target (keyed on both so a rotation /
+        // split-view resize re-requests, but scrolling and month expansion do not — no flicker).
+        .task(id: "\(cell.mediaItem.id)|\(Int(targetPx))") {
+            await loadThumbnail(targetPx: targetPx)
+        }
+    }
+
+    /// The cell's visuals, split out of `body` so the gesture modifiers above read clearly.
+    private var content: some View {
             // A fixed square cell sized to the column width; the image fills it and is clipped, so
             // every thumbnail is identical in size and none overflow into (obscure) their neighbours.
             Color.clear
@@ -65,16 +93,6 @@ struct MediaThumbnailView: View {
                 }
                 .contentShape(Rectangle())
                 .overlay(Rectangle().stroke(Color.accentColor, lineWidth: isSelected ? 3 : 0))
-        }
-        .buttonStyle(.plain)
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.4).onEnded { _ in onLongPress?() }
-        )
-        // Load once per cell at the parent's stable pixel target (keyed on both so a rotation /
-        // split-view resize re-requests, but scrolling and month expansion do not — no flicker).
-        .task(id: "\(cell.mediaItem.id)|\(Int(targetPx))") {
-            await loadThumbnail(targetPx: targetPx)
-        }
     }
 
     private func badge(_ text: String, bold: Bool = false) -> some View {
