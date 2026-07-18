@@ -7,7 +7,10 @@ struct GalleryView: View {
 
     @StateObject private var vm = GalleryViewModel()
     var scrollToMonthKey: String? = nil
+    /// One-shot sort applied on open (e.g. "Free up space" -> Largest-overall), NOT persisted.
+    var initialSort: SortMode? = nil
 
+    @State private var didApplyInitialSort = false
     @State private var selectedItem: MediaItem? = nil
     @State private var showingPermissionAlert = false
     @State private var showingStats = false
@@ -198,6 +201,12 @@ struct GalleryView: View {
         }
         .sheet(isPresented: $showingStats) { StatsView() }
         .onAppear {
+            // Apply the one-shot open sort exactly once (onAppear re-fires when returning from the
+            // viewer; we must not clobber a sort the user changed via the picker meanwhile).
+            if let s = initialSort, !didApplyInitialSort {
+                didApplyInitialSort = true
+                vm.applyInitialSort(s)
+            }
             let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
             let uiTest = UITestHooks.synthetic
             // Test hook: pretend authorized so the body renders the grid rather than the branch that

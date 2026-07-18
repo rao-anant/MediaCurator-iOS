@@ -36,7 +36,7 @@ struct HomeView: View {
                     if let state = vm.state {
                         // Hero = the curation entry point (opens the gallery at the resume month).
                         HeroCard(state: state) {
-                            path.append(NavDestination.gallery(monthKey: state.resumeMonthKey))
+                            path.append(NavDestination.gallery(monthKey: state.resumeMonthKey, sort: nil))
                         }
                         // Browse by Location — compact chips right under the hero (matches
                         // Android), dimmed until ≥1 place is indexed (spec §7).
@@ -58,7 +58,7 @@ struct HomeView: View {
 
                         LazyVGrid(columns: twoColumns, spacing: 12) {
                             GridCard(title: "Free up space", subtitle: "Biggest files first", icon: "internaldrive") {
-                                path.append(NavDestination.gallery(monthKey: nil))
+                                path.append(NavDestination.gallery(monthKey: nil, sort: .sizeAbsolute))
                             }
                             GridCard(title: "Find duplicates",
                                      subtitle: photosHashing
@@ -106,7 +106,7 @@ struct HomeView: View {
             .sheet(isPresented: $showingStats) { StatsView() }
             .navigationDestination(for: NavDestination.self) { dest in
                 switch dest {
-                case .gallery(let key):  GalleryView(scrollToMonthKey: key)
+                case .gallery(let key, let sort):  GalleryView(scrollToMonthKey: key, initialSort: sort)
                 case .duplicates:        DuplicatesView()
                 case .hidden:            HiddenView()
                 case .trash:             TrashView()
@@ -123,7 +123,7 @@ struct HomeView: View {
             // into the gallery so a scripted state can be captured on a device I can't tap.
             if UITestHooks.galleryScroll {
                 Self.demoShownThisProcess = true
-                if path.isEmpty { path.append(NavDestination.gallery(monthKey: nil)) }
+                if path.isEmpty { path.append(NavDestination.gallery(monthKey: nil, sort: nil)) }
                 return
             }
             if UITestHooks.trash {
@@ -131,6 +131,11 @@ struct HomeView: View {
                 // Stage ~24 synthetic April-camera items so the Trash isn't empty, then open it.
                 prefs.setStagedForDeletion(Set((12...35).map { "test-\($0)" }))
                 if path.isEmpty { path.append(NavDestination.trash) }
+                return
+            }
+            if UITestHooks.freeSpace {
+                Self.demoShownThisProcess = true
+                if path.isEmpty { path.append(NavDestination.gallery(monthKey: nil, sort: .sizeAbsolute)) }
                 return
             }
             // Mandatory first-run demo: once per process, unless opted out (spec §13).
@@ -157,7 +162,9 @@ struct HomeView: View {
 // MARK: - Navigation destinations
 
 enum NavDestination: Hashable {
-    case gallery(monthKey: String?)
+    /// `sort` applies a one-shot sort on open (e.g. "Free up space" -> Largest-overall), without
+    /// changing the user's saved default. nil keeps the persisted sort.
+    case gallery(monthKey: String?, sort: SortMode?)
     case duplicates
     case hidden
     case trash

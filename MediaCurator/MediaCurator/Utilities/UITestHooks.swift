@@ -19,12 +19,15 @@ enum UITestHooks {
     static var collapseAfterScroll: Bool { args.contains("-uiCollapse") }
     /// Stage a few items and open the Trash screen.
     static var trash: Bool { args.contains("-uiTrash") }
+    /// Open the gallery via the "Free up space" path (Largest-overall sort).
+    static var freeSpace: Bool { args.contains("-uiFreeSpace") }
     /// Any test mode: gates the synthetic data + PhotoKit bypasses (so nothing prompts).
-    static var synthetic: Bool { galleryScroll || trash }
+    static var synthetic: Bool { galleryScroll || trash || freeSpace }
     #else
     static let galleryScroll = false
     static let collapseAfterScroll = false
     static let trash = false
+    static let freeSpace = false
     static let synthetic = false
     #endif
 }

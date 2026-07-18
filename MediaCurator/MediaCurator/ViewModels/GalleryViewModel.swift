@@ -333,6 +333,15 @@ final class GalleryViewModel: ObservableObject {
 
     // MARK: - Sort
 
+    /// Apply a sort on open WITHOUT persisting it as the user's default (e.g. "Free up space" ->
+    /// Largest-overall). A later fresh gallery visit reverts to the saved sort. No reload here —
+    /// the caller's onAppear loadMedia runs right after and picks up the new sortMode.
+    func applyInitialSort(_ mode: SortMode) {
+        guard mode != sortMode else { return }
+        sortMode = mode
+        structuralVersion += 1
+    }
+
     func setSortMode(_ mode: SortMode) {
         guard mode != sortMode else { return }
         sortMode = mode
