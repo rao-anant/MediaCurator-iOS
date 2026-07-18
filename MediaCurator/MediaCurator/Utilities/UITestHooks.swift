@@ -23,14 +23,17 @@ enum UITestHooks {
     static var freeSpace: Bool { args.contains("-uiFreeSpace") }
     /// Open the Browse-by-location (cities) screen.
     static var place: Bool { args.contains("-uiPlace") }
+    /// Open two months so the previous-month pill appears.
+    static var prevMonth: Bool { args.contains("-uiPrevMonth") }
     /// Any test mode: gates the synthetic data + PhotoKit bypasses (so nothing prompts).
-    static var synthetic: Bool { galleryScroll || trash || freeSpace || place }
+    static var synthetic: Bool { galleryScroll || trash || freeSpace || place || prevMonth }
     #else
     static let galleryScroll = false
     static let collapseAfterScroll = false
     static let trash = false
     static let freeSpace = false
     static let place = false
+    static let prevMonth = false
     static let synthetic = false
     #endif
 }

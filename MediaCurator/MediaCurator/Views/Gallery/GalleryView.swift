@@ -138,6 +138,7 @@ struct GalleryView: View {
                     )
                     Divider()
                     sortBar
+                    previousMonthPill
                     galleryContent
                         // In selection mode the action bar sits BELOW the grid and insets it,
                         // rather than overlaying the last row (parity with Android a29).
@@ -297,6 +298,30 @@ struct GalleryView: View {
     }
 
     // MARK: - Sort bar
+
+    /// Slim "jump back" pill (design debate Topic 1): appears once a second month is opened, always
+    /// naming the ONE month you came from, and taps to return to it (which makes the current month
+    /// the new "previous" — an A/B bounce). Hidden when there's no valid previous month.
+    @ViewBuilder
+    private var previousMonthPill: some View {
+        if let label = vm.previousMonthLabel {
+            HStack(spacing: 0) {
+                Button { vm.jumpToPreviousMonth() } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrow.uturn.backward").font(.caption)
+                        Text("Back to \(label)").font(.subheadline).fontWeight(.medium)
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(Color.accentColor.opacity(0.12), in: Capsule())
+                    .foregroundStyle(Color.accentColor)
+                }
+                .buttonStyle(.plain)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
 
     /// Always-visible sort indicator at the top of the gallery — shows the current order
     /// and lets the user change it (mirrors Android's gallery sort header).

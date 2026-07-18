@@ -223,6 +223,7 @@ final class GalleryViewModel: ObservableObject {
         }
 
         let (visible, done) = repo.processAndGroupMedia(typeFiltered)
+        visibleMonthKeys = Set(visible.map(\.key))   // drives the previous-month pill's validity
         let built = buildGalleryItems(visible: visible, done: done, allMedia: typeFiltered)
 
         galleryItems   = built.items
@@ -298,6 +299,9 @@ final class GalleryViewModel: ObservableObject {
         let parts = key.split(separator: "-")
         guard parts.count == 2, let y = Int(parts[0]), let m = Int(parts[1]) else { return }
         prefs.markMonthDone(year: y, month: m)
+        // A hidden month has left the list — a jump-back to it would be a dead link (design
+        // debate Topic 1, point 6). Clear the pointer if it was aimed there.
+        if previousMonthKey == key { previousMonthKey = nil }
         structuralVersion += 1
         // Marking done is instantly reversible (just a prefs flag), so no deferred commit —
         // we surface an Undo toast purely as a convenience / confirmation.
@@ -377,6 +381,31 @@ final class GalleryViewModel: ObservableObject {
 
     /// The single month currently open in the accordion (nil = none). Drives the pinned bar.
     @Published var openMonthKey: String? = nil
+
+    // MARK: - Previous-explored-month indicator (design debate Topic 1)
+
+    /// The month open immediately before the current one. Single slot, no stack; session-only.
+    /// Set when a different month is opened; cleared when it leaves the visible list (hidden /
+    /// filtered out). Drives the "jump back" pill.
+    @Published var previousMonthKey: String? = nil
+    /// Month keys currently in the visible gallery (post hide-split + type-filter). Used to drop the
+    /// pointer when its target is no longer reachable.
+    private var visibleMonthKeys: Set<String> = []
+    /// The pill's label, or nil when it should be hidden: needs a previous month, an open current
+    /// month to be "previous" to, and the target still present in the visible list.
+    var previousMonthLabel: String? {
+        guard let prev = previousMonthKey, openMonthKey != nil,
+              prev != openMonthKey, visibleMonthKeys.contains(prev) else { return nil }
+        return Formatters.monthLabel(from: prev)
+    }
+    /// Tap the pill: re-open the previous month. The month we leave becomes the new "previous",
+    /// producing an A/B bounce between the two most-recent months.
+    func jumpToPreviousMonth() {
+        guard let prev = previousMonthKey, prev != openMonthKey,
+              visibleMonthKeys.contains(prev) else { return }
+        toggleMonthExpansion(prev)
+    }
+
     /// The sub-group currently open inside `openMonthKey` (most recently expanded if both are).
     /// Drives the pinned sub-group row. Derived from the MODEL, never from on-screen header
     /// positions: the sub-header lives in a LazyVStack, so scrolling into its photos drops the row
@@ -413,8 +442,23 @@ final class GalleryViewModel: ObservableObject {
     /// drives the accordion to "April 2024 > Camera open, scrolled to the bottom" so the sticky-header
     /// rendering at a deep scroll position can be captured on a machine that can't tap the simulator.
     func uiTestDriveIfRequested() {
-        guard UITestHooks.galleryScroll, !uiTestDriven else { return }
+        guard UITestHooks.galleryScroll || UITestHooks.prevMonth, !uiTestDriven else { return }
         uiTestDriven = true
+
+        // prevMonth: open one month, then a second one, so the first becomes "previous" and the
+        // jump-back pill appears naming it (design debate Topic 1). Verifies the pill's layout.
+        if UITestHooks.prevMonth {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                if !expandedYears.contains(2024) { toggleYearExpansion(2024) }
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                toggleMonthExpansion("2024-02")   // open February first
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                toggleMonthExpansion("2024-04")   // then April → previous = February 2024
+            }
+            return
+        }
+
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 900_000_000)
             if !expandedYears.contains(2024) { toggleYearExpansion(2024) }
@@ -452,6 +496,9 @@ final class GalleryViewModel: ObservableObject {
             // otherwise let the header drift above the top of the screen (see ph4).
             requestScroll(toID: "month-\(key)")
         } else {
+            // The month we're leaving becomes "previous" — drives the jump-back pill (design
+            // debate Topic 1). "The month you left, however you left it."
+            if let leaving = openMonthKey, leaving != key { previousMonthKey = leaving }
             // Accordion: only one month open at a time. Opening a month collapses the
             // previously open month and all sub-group expansions (spec §3).
             expandedMonths = [key]
