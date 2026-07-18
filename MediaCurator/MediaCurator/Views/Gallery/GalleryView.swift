@@ -80,6 +80,17 @@ struct GalleryView: View {
         if let y = headerY(prefix: "Y:\(year)"), y > 0 { return nil }
         return year
     }
+
+    /// The model row behind the pinned year, so the bar can carry the same count + size the real
+    /// row shows. Android's sticky year row does this (`tvStickyYearStats`); iOS was dropping the
+    /// figures the moment the real row scrolled off, which read as the numbers disappearing.
+    private func yearHeader(for year: String) -> GalleryItem.YearHeader? {
+        guard let y = Int(year) else { return nil }
+        for item in vm.galleryItems {
+            if case .yearHeader(let h) = item, h.year == y { return h }
+        }
+        return nil
+    }
     /// Approximate heights of the pinned rows — used to tell when a real (in-list) header has slid
     /// behind the bar so its pinned stand-in should take over.
     private let stickyYearRowH: CGFloat = 34
@@ -265,9 +276,19 @@ struct GalleryView: View {
                             .frame(width: 16)
                         Text(year).font(.subheadline).bold()
                         Spacer()
+                        // Same figures as the real row, so scrolling doesn't make them vanish
+                        // (matches Android's tvStickyYearStats). One line, not the real row's
+                        // stacked pair, to keep the pinned bar slim.
+                        if let h = yearHeader(for: year) {
+                            Text("\(Formatters.countShort(h.totalItems)) · \(Formatters.bytes(h.totalBytes))")
+                                .font(.caption).foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
                     .padding(.horizontal, 16).padding(.vertical, 6)
-                    .background(Color(.systemBackground).opacity(0.96))
+                    // Fully opaque: at 0.96 the real row bled a faint ghost of its counts through
+                    // the bar as it scrolled underneath.
+                    .background(Color(.systemBackground))
                 }
                 .buttonStyle(.plain)
                 if let month = stickyMonthLabel {
@@ -289,7 +310,7 @@ struct GalleryView: View {
                             Spacer()
                         }
                         .padding(.horizontal, 16).padding(.vertical, 4)
-                        .background(Color(.systemBackground).opacity(0.96))
+                        .background(Color(.systemBackground))
                     }
                     .buttonStyle(.plain)
                 }
@@ -306,7 +327,7 @@ struct GalleryView: View {
                             Spacer()
                         }
                         .padding(.horizontal, 24).padding(.vertical, 4)
-                        .background(Color(.systemBackground).opacity(0.96))
+                        .background(Color(.systemBackground))
                     }
                     .buttonStyle(.plain)
                 }

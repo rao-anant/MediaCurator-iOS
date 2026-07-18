@@ -72,6 +72,11 @@ Android codebase.
 - **Fix:** Split into `stickyYearCandidate` (which year — still ungated, `stickyMonthLabel` needs it
   as a lookup key) and `stickyYear` (whether to pin — nil when the real `Y:` row reports y > 0).
 - **Android check:** none needed; Android renders one year row correctly. iOS-only regression.
+- **Follow-up (ph10/ph11):** with the duplicate gone, the remaining difference between the two
+  states was that the *pinned* year row carried no count/size, so the figures appeared to vanish
+  on scroll. Android's sticky year row shows them (`tvStickyYearStats`); iOS now does too, on one
+  line to keep the bar slim. Also made all three pinned rows fully opaque — at `opacity(0.96)`
+  the real row ghosted through the bar as it scrolled underneath.
 
 ---
 
