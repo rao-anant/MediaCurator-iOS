@@ -21,13 +21,16 @@ enum UITestHooks {
     static var trash: Bool { args.contains("-uiTrash") }
     /// Open the gallery via the "Free up space" path (Largest-overall sort).
     static var freeSpace: Bool { args.contains("-uiFreeSpace") }
+    /// Open the Browse-by-location (cities) screen.
+    static var place: Bool { args.contains("-uiPlace") }
     /// Any test mode: gates the synthetic data + PhotoKit bypasses (so nothing prompts).
-    static var synthetic: Bool { galleryScroll || trash || freeSpace }
+    static var synthetic: Bool { galleryScroll || trash || freeSpace || place }
     #else
     static let galleryScroll = false
     static let collapseAfterScroll = false
     static let trash = false
     static let freeSpace = false
+    static let place = false
     static let synthetic = false
     #endif
 }

@@ -138,6 +138,11 @@ struct HomeView: View {
                 if path.isEmpty { path.append(NavDestination.gallery(monthKey: nil, sort: .sizeAbsolute)) }
                 return
             }
+            if UITestHooks.place {
+                Self.demoShownThisProcess = true
+                if path.isEmpty { path.append(NavDestination.placeCities) }
+                return
+            }
             // Mandatory first-run demo: once per process, unless opted out (spec §13).
             if !Self.demoShownThisProcess && !prefs.isDemoOptedOut() {
                 Self.demoShownThisProcess = true

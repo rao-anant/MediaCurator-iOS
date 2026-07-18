@@ -21,6 +21,7 @@ struct PlaceBrowseView: View {
         VStack(spacing: 0) {
             if showIntro { placeIntroBanner }
             if mode == .drill && !vm.breadcrumb.isEmpty { breadcrumbBar }
+            if vm.selectedCity == nil { searchField }
             if vm.selectedCity == nil { sortBar }
 
             if let p = vm.indexProgress {
@@ -43,6 +44,7 @@ struct PlaceBrowseView: View {
         .navigationTitle(mode == .cities ? "Browse by location" : "By location")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
+        .scrollDismissesKeyboard(.immediately)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 // ‹ walks up one drill level (photos → city → state → country), exiting to Home
@@ -56,8 +58,6 @@ struct PlaceBrowseView: View {
                 Button { dismiss() } label: { Image(systemName: "house") }
             }
         }
-        .searchable(text: $vm.query, placement: .navigationBarDrawer(displayMode: .always),
-                    prompt: "Search a city, state, or country")
         .onAppear {
             vm.load()
             showIntro = !prefs.isPlaceIntroShown()
@@ -65,6 +65,26 @@ struct PlaceBrowseView: View {
         .fullScreenCover(item: $selectedItem) { item in
             SimpleMediaViewer(items: vm.searching ? vm.searchPhotos : vm.photos, startingID: item.id)
         }
+    }
+
+    /// In-content search (moved out of the nav bar: an always-on `.searchable` there competed with
+    /// the custom drill Back button for the first tap, so Back needed a double-press — worst on iPad).
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField("Search a city, state, or country", text: $vm.query)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            if !vm.query.isEmpty {
+                Button { vm.query = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 9)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal).padding(.top, 8)
     }
 
     private var sortBar: some View {
