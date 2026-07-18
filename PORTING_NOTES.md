@@ -41,6 +41,30 @@ affordance, photos-first hashing UX, and the earlier sticky-scroll / dedupe rows
 
 ---
 
+## Headless UI harness (DEBUG-only) — testing the gallery without a device
+
+MacinCloud blocks interactive sim automation (no `idb` — brew taps are read-only; XCUITest fails
+with "AX loaded notification" timeout), and the iOS-26 Photos permission prompt can't be tapped
+headlessly. Workaround, gated entirely behind `UITestHooks.galleryScroll` (a compile-time `false`
+in Release, so it's absent from store builds): launching with `-uiGalleryScroll` makes the app use
+**synthetic** gallery data + **placeholder** tiles — zero PhotoKit calls, so nothing can prompt —
+and auto-drives the accordion (open April 2024 → Camera, scroll deep). Then screenshot via
+`simctl io <sim> screenshot`. Add `-uiCollapse` to also collapse the scrolled month (p2 repro).
+
+```bash
+xcrun simctl boot <sim>; open -a Simulator
+xcodebuild -scheme MediaCurator -destination 'id=<sim>' -configuration Debug build
+xcrun simctl install <sim> <path>/MediaCurator.app
+xcrun simctl launch <sim> com.anant.MediaCurator -uiGalleryScroll   # add -uiCollapse for p2
+xcrun simctl io <sim> screenshot out.png
+```
+
+Verifies LAYOUT (sticky headers, month tree, scroll landing) — NOT gesture-timing or real
+thumbnails. Synthetic tree lives in `MediaRepository.syntheticTestMedia()`; driver in
+`GalleryViewModel.uiTestDriveIfRequested()`.
+
+---
+
 ## Where things stand
 
 The iOS app is **no longer a placeholder** — the first vertical slice (the Gallery

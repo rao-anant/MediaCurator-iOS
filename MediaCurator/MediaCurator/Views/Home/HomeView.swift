@@ -119,6 +119,13 @@ struct HomeView: View {
         }
         .onAppear {
             vm.load()
+            // Screenshot-test hook (never triggered in normal use): skip the demo and jump straight
+            // into the gallery so a scripted state can be captured on a device I can't tap.
+            if UITestHooks.galleryScroll {
+                Self.demoShownThisProcess = true
+                if path.isEmpty { path.append(NavDestination.gallery(monthKey: nil)) }
+                return
+            }
             // Mandatory first-run demo: once per process, unless opted out (spec §13).
             if !Self.demoShownThisProcess && !prefs.isDemoOptedOut() {
                 Self.demoShownThisProcess = true

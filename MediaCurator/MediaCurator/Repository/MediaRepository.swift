@@ -16,6 +16,10 @@ final class MediaRepository {
     /// Fetches ALL assets (images, video, audio) from the Photos library.
     /// PDFs are not in the Photos library on iOS; they are handled separately via FileManager.
     func fetchAllMedia() async -> [MediaItem] {
+        // Screenshot-test hook only: return a synthetic tree with NO PhotoKit access at all, so the
+        // (untappable) photo-permission prompt never fires. Lets gallery LAYOUT be verified headlessly.
+        if UITestHooks.galleryScroll { return Self.syntheticTestMedia() }
+
         let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         guard status == .authorized || status == .limited else { return [] }
 
@@ -92,6 +96,33 @@ final class MediaRepository {
             else { visible.append(group) }
         }
         return (visible, done)
+    }
+
+    /// Synthetic gallery tree for the `-uiGalleryScroll` screenshot hook (no PhotoKit). April 2024
+    /// has both a Camera (15) and a WhatsApp (8) sub-group and enough items to scroll.
+    static func syntheticTestMedia() -> [MediaItem] {
+        var items: [MediaItem] = []
+        let cal = Calendar.current
+        func add(_ y: Int, _ m: Int, _ count: Int, wa: Bool) {
+            for i in 0..<count {
+                let date = cal.date(from: DateComponents(year: y, month: m, day: min(1 + i, 27), hour: 12)) ?? Date()
+                let n = items.count
+                items.append(MediaItem(
+                    id: "test-\(n)", localIdentifier: "test-\(n)", dateTaken: date,
+                    displayName: wa ? "whatsapp_\(y)\(m)_\(i).jpg" : "IMG_\(y)\(m)_\(i).jpg",
+                    size: Int64(500_000 + i * 12_345), type: .image, duration: 0,
+                    relativePath: wa ? "DCIM/WhatsApp Images/" : "DCIM/Camera/"))
+            }
+        }
+        add(2024, 2, 12, wa: false)
+        add(2024, 4, 40, wa: false); add(2024, 4, 8, wa: true)   // big enough to scroll the header off
+        add(2024, 7, 15, wa: false)
+        add(2024, 9, 12, wa: false)
+        add(2024, 11, 15, wa: false)
+        add(2025, 1, 10, wa: false)
+        add(2025, 6, 10, wa: false)
+        add(2026, 2, 10, wa: false)
+        return items
     }
 
     // MARK: - Private helpers

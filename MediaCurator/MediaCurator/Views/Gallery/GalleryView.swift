@@ -145,7 +145,11 @@ struct GalleryView: View {
             case .denied, .restricted:
                 permissionDeniedView
             case .notDetermined:
-                Color.clear.onAppear { Task { await vm.requestAuthorization() } }
+                Color.clear.onAppear {
+                    if !UITestHooks.galleryScroll {
+                        Task { await vm.requestAuthorization() }
+                    }
+                }
             @unknown default:
                 Color.clear
             }
@@ -195,10 +199,14 @@ struct GalleryView: View {
         .sheet(isPresented: $showingStats) { StatsView() }
         .onAppear {
             let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-            vm.authorizationStatus = status
-            if status == .authorized || status == .limited {
+            let uiTest = UITestHooks.galleryScroll
+            // Test hook: pretend authorized so the body renders the grid rather than the branch that
+            // re-raises the (untappable) permission prompt.
+            vm.authorizationStatus = uiTest ? .authorized : status
+            if status == .authorized || status == .limited || uiTest {
                 vm.loadMedia(forceRefresh: false)
             }
+            vm.uiTestDriveIfRequested()
         }
         .fullScreenCover(item: $selectedItem) { item in
             // Gallery: page only within the opened photo's month (spec / Android behavior) — EXCEPT

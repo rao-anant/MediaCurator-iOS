@@ -137,11 +137,15 @@ final class GalleryViewModel: ObservableObject {
 
         self.lastBatchSize = prefs.getLastDeletedBatch().count
 
-        // Observe Photos library changes (mirrors Android's ContentObserver)
-        photoLibraryObserver = PhotoLibraryObserver { [weak self] in
-            Task { @MainActor [weak self] in self?.loadMedia(forceRefresh: true) }
+        // Observe Photos library changes (mirrors Android's ContentObserver). Registering accesses
+        // the library, which raises the permission prompt on .notDetermined — skip under the
+        // screenshot-test flag (which uses synthetic data and never touches PhotoKit).
+        if !UITestHooks.galleryScroll {
+            photoLibraryObserver = PhotoLibraryObserver { [weak self] in
+                Task { @MainActor [weak self] in self?.loadMedia(forceRefresh: true) }
+            }
+            PHPhotoLibrary.shared().register(photoLibraryObserver!)
         }
-        PHPhotoLibrary.shared().register(photoLibraryObserver!)
     }
 
     deinit {
@@ -393,6 +397,33 @@ final class GalleryViewModel: ObservableObject {
     @Published var scrollRequest: ScrollRequest? = nil
     private func requestScroll(toID id: String, belowSticky: Bool = false) {
         scrollRequest = ScrollRequest(id: id, token: UUID(), belowSticky: belowSticky)
+    }
+
+    private var uiTestDriven = false
+    /// Screenshot-test hook (only runs with the `-uiGalleryScroll` launch arg, never in normal use):
+    /// drives the accordion to "April 2024 > Camera open, scrolled to the bottom" so the sticky-header
+    /// rendering at a deep scroll position can be captured on a machine that can't tap the simulator.
+    func uiTestDriveIfRequested() {
+        guard UITestHooks.galleryScroll, !uiTestDriven else { return }
+        uiTestDriven = true
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            if !expandedYears.contains(2024) { toggleYearExpansion(2024) }
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            if !expandedMonths.contains("2024-04") { toggleMonthExpansion("2024-04") }
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            if !expandedSubGroups.contains("2024-04:cam") { toggleSubGroupExpansion("2024-04:cam") }
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            // Scroll to the WhatsApp sub-header, which sits below all 40 camera tiles: pushes the
+            // real "April 2024" header off the top so the sticky bar engages (the bug scenario).
+            requestScroll(toID: "sub-2024-04:wa", belowSticky: true)
+
+            // p2 repro: collapse April from the scrolled-down position and see where it lands.
+            if UITestHooks.collapseAfterScroll {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                toggleMonthExpansion("2024-04")   // collapse the open, scrolled month
+            }
+        }
     }
 
     private var walk = WalkLatch()

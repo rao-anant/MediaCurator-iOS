@@ -42,7 +42,8 @@ final class HomeViewModel: ObservableObject {
             // it shows the system prompt. We proceed either way — an empty library renders the
             // "no media" state cleanly.
             let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-            if status == .notDetermined {
+            // Screenshot-test hook only: don't raise the (untappable) permission prompt on the sim.
+            if status == .notDetermined && !UITestHooks.galleryScroll {
                 _ = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
             }
 
@@ -97,13 +98,14 @@ final class HomeViewModel: ObservableObject {
 
             // Continuously hash photos+videos in the background so the Duplicates screen is instant.
             // Serial + cancel-on-background (see HashingCoordinator) keeps it watchdog-safe.
-            if prefs.isPhotoDuplicateDetectionEnabled() {
+            // (Skipped under the screenshot-test flag — it would touch PhotoKit and prompt.)
+            if prefs.isPhotoDuplicateDetectionEnabled() && !UITestHooks.galleryScroll {
                 HashingCoordinator.shared.start(items: media)
             }
 
             // Kick place indexing in the background (offline reverse-geocoding, spec §7) so the
             // location cards light up. Refresh the count when it finishes.
-            if prefs.isPlaceSearchEnabled() {
+            if prefs.isPlaceSearchEnabled() && !UITestHooks.galleryScroll {
                 Task.detached(priority: .background) {
                     _ = await PlaceIndexer.shared.index(media) { _, _ in }
                     // Count only located photos still in the live library (matches "By City").
