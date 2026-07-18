@@ -138,7 +138,6 @@ struct GalleryView: View {
                     )
                     Divider()
                     sortBar
-                    previousMonthPill
                     galleryContent
                         // In selection mode the action bar sits BELOW the grid and insets it,
                         // rather than overlaying the last row (parity with Android a29).
@@ -300,60 +299,68 @@ struct GalleryView: View {
     // MARK: - Sort bar
 
     /// Slim "jump back" pill (design debate Topic 1): appears once a second month is opened, always
-    /// naming the ONE month you came from, and taps to return to it (which makes the current month
-    /// the new "previous" — an A/B bounce). Hidden when there's no valid previous month.
-    @ViewBuilder
-    private var previousMonthPill: some View {
-        if let label = vm.previousMonthLabel {
-            HStack(spacing: 0) {
-                Button { vm.jumpToPreviousMonth() } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "arrow.uturn.backward").font(.caption)
-                        Text("Back to \(label)").font(.subheadline).fontWeight(.medium)
-                    }
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(Color.accentColor.opacity(0.12), in: Capsule())
-                    .foregroundStyle(Color.accentColor)
+    /// Always-visible sort indicator at the top of the gallery — shows the current order
+    /// and lets the user change it (mirrors Android's gallery sort header). Trailing it, in the
+    /// same status row, is the read-only previous-explored-month label (see `previousMonthLabel`).
+    private var sortBar: some View {
+        VStack(spacing: 0) {
+            // One row when both fit; otherwise the label drops to its own line. The long sort
+            // names ("Most items per month") leave too little room beside them on a narrow phone,
+            // and truncating gave "Came from…" — hiding the month, the only thing the label is
+            // there to say. Better to spend a line than to say nothing.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    sortMenu
+                    Spacer(minLength: 8)
+                    previousMonthText
                 }
-                .buttonStyle(.plain)
-                Spacer(minLength: 0)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 0) { sortMenu; Spacer(minLength: 0) }
+                    previousMonthText
+                }
             }
-            .padding(.horizontal, 12).padding(.vertical, 6)
-            .transition(.move(edge: .top).combined(with: .opacity))
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemBackground))
+            Divider()
         }
     }
 
-    /// Always-visible sort indicator at the top of the gallery — shows the current order
-    /// and lets the user change it (mirrors Android's gallery sort header).
-    private var sortBar: some View {
-        VStack(spacing: 0) {
-            Menu {
-                ForEach(SortMode.allCases, id: \.self) { mode in
-                    Button {
-                        vm.setSortMode(mode)
-                    } label: {
-                        if vm.sortMode == mode {
-                            Label(mode.displayName, systemImage: "checkmark")
-                        } else {
-                            Text(mode.displayName)
-                        }
+    private var sortMenu: some View {
+        Menu {
+            ForEach(SortMode.allCases, id: \.self) { mode in
+                Button {
+                    vm.setSortMode(mode)
+                } label: {
+                    if vm.sortMode == mode {
+                        Label(mode.displayName, systemImage: "checkmark")
+                    } else {
+                        Text(mode.displayName)
                     }
                 }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.up.arrow.down")
-                    Text("Sorted by \(vm.sortMode.displayName)")
-                        .fontWeight(.medium)
-                    Image(systemName: "chevron.down").font(.caption2)
-                    Spacer()
-                }
-                .font(.subheadline)
-                .padding(.horizontal, 16).padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.secondarySystemBackground))
             }
-            .buttonStyle(.plain)
-            Divider()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.up.arrow.down")
+                Text("Sorted by \(vm.sortMode.displayName)")
+                    .fontWeight(.medium).lineLimit(1)
+                Image(systemName: "chevron.down").font(.caption2)
+            }
+            .font(.subheadline)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Previous-explored-month, phase 1: plain secondary text, NO arrow / pill / tint — an
+    /// affordance on non-interactive text invites a tap that does nothing. Hit testing is off so
+    /// it can't steal the sort menu's tap either.
+    @ViewBuilder
+    private var previousMonthText: some View {
+        if let prev = vm.previousMonthLabel {
+            Text("Came from \(prev)")
+                .font(.subheadline).foregroundStyle(.secondary)
+                .lineLimit(1)
+                .allowsHitTesting(false)
         }
     }
 

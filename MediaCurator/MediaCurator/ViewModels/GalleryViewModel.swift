@@ -391,19 +391,18 @@ final class GalleryViewModel: ObservableObject {
     /// Month keys currently in the visible gallery (post hide-split + type-filter). Used to drop the
     /// pointer when its target is no longer reachable.
     private var visibleMonthKeys: Set<String> = []
-    /// The pill's label, or nil when it should be hidden: needs a previous month, an open current
+    /// The label's text, or nil when it should be hidden: needs a previous month, an open current
     /// month to be "previous" to, and the target still present in the visible list.
+    ///
+    /// Phase 1 is INFORMATIONAL ONLY — this is read-only text, deliberately not tappable (see
+    /// DESIGN_DEBATES.md Topic 1, Android's amendment turn). A tap would re-open the named month
+    /// through `toggleMonthExpansion`, whose open-branch calls `requestScroll(belowSticky:)` — the
+    /// scroll-anchoring path behind the b26/b28/b29 regressions, with p2 still unreproduced. Not a
+    /// risk worth carrying for a shortcut. Point 3 (tap => A/B bounce) is deferred to a phase 2.
     var previousMonthLabel: String? {
         guard let prev = previousMonthKey, openMonthKey != nil,
               prev != openMonthKey, visibleMonthKeys.contains(prev) else { return nil }
-        return Formatters.monthLabel(from: prev)
-    }
-    /// Tap the pill: re-open the previous month. The month we leave becomes the new "previous",
-    /// producing an A/B bounce between the two most-recent months.
-    func jumpToPreviousMonth() {
-        guard let prev = previousMonthKey, prev != openMonthKey,
-              visibleMonthKeys.contains(prev) else { return }
-        toggleMonthExpansion(prev)
+        return Formatters.monthLabelShort(from: prev)
     }
 
     /// The sub-group currently open inside `openMonthKey` (most recently expanded if both are).
@@ -450,6 +449,9 @@ final class GalleryViewModel: ObservableObject {
         if UITestHooks.prevMonth {
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 900_000_000)
+                // Worst case for the status row's width: the longest sort name sharing it with the
+                // "Came from" label. If these two fit here, every shorter combination fits.
+                setSortMode(.countPerMonth)
                 if !expandedYears.contains(2024) { toggleYearExpansion(2024) }
                 try? await Task.sleep(nanoseconds: 700_000_000)
                 toggleMonthExpansion("2024-02")   // open February first

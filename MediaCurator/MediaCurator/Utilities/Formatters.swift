@@ -39,4 +39,12 @@ enum Formatters {
                      "July","August","September","October","November","December"]
         return "\(names[month - 1]) \(year)"
     }
+
+    /// "YYYY-MM" → "Mar 2024". Short form for tight status rows (e.g. the "Came from" label
+    /// beside the sort order), matching Android's copy exactly.
+    static func monthLabelShort(from key: String) -> String {
+        let full = monthLabel(from: key)
+        guard let space = full.firstIndex(of: " ") else { return full }
+        return String(full[full.startIndex..<space].prefix(3)) + full[space...]
+    }
 }
