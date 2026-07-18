@@ -146,7 +146,7 @@ struct GalleryView: View {
                 permissionDeniedView
             case .notDetermined:
                 Color.clear.onAppear {
-                    if !UITestHooks.galleryScroll {
+                    if !UITestHooks.synthetic {
                         Task { await vm.requestAuthorization() }
                     }
                 }
@@ -199,7 +199,7 @@ struct GalleryView: View {
         .sheet(isPresented: $showingStats) { StatsView() }
         .onAppear {
             let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-            let uiTest = UITestHooks.galleryScroll
+            let uiTest = UITestHooks.synthetic
             // Test hook: pretend authorized so the body renders the grid rather than the branch that
             // re-raises the (untappable) permission prompt.
             vm.authorizationStatus = uiTest ? .authorized : status

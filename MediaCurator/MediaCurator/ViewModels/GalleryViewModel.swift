@@ -140,7 +140,7 @@ final class GalleryViewModel: ObservableObject {
         // Observe Photos library changes (mirrors Android's ContentObserver). Registering accesses
         // the library, which raises the permission prompt on .notDetermined — skip under the
         // screenshot-test flag (which uses synthetic data and never touches PhotoKit).
-        if !UITestHooks.galleryScroll {
+        if !UITestHooks.synthetic {
             photoLibraryObserver = PhotoLibraryObserver { [weak self] in
                 Task { @MainActor [weak self] in self?.loadMedia(forceRefresh: true) }
             }

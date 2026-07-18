@@ -92,7 +92,7 @@ struct MediaThumbnailView: View {
     private func loadThumbnail(targetPx: CGFloat) async {
         // Screenshot-test hook only: skip the PHImageManager request, which pops the (untappable)
         // photo-permission prompt on the sim. The placeholder tile is enough to verify layout.
-        if UITestHooks.galleryScroll { return }
+        if UITestHooks.synthetic { return }
         let id = cell.mediaItem.localIdentifier
         let result = PHAsset.fetchAssets(withLocalIdentifiers: [id], options: nil)
         guard let asset = result.firstObject else { return }

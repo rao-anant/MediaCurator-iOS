@@ -1,21 +1,30 @@
 import Foundation
 
-/// Debug-only test scaffolding. In a Release/store build `galleryScroll` is a compile-time `false`,
-/// so every `if UITestHooks.galleryScroll { … }` block (synthetic gallery data, PhotoKit bypasses,
-/// the auto-drive-and-scroll driver) is dead-code-eliminated and cannot run for real users.
+/// Debug-only test scaffolding. In a Release/store build every flag below is a compile-time `false`,
+/// so all `if UITestHooks.… { }` blocks (synthetic gallery data, PhotoKit bypasses, the auto-drive
+/// drivers) are dead-code-eliminated and cannot run for real users.
 ///
-/// Enabled only on the simulator by launching with `-uiGalleryScroll`, e.g.:
-///   xcrun simctl launch <sim> com.anant.MediaCurator -uiGalleryScroll
-/// It lets the gallery LAYOUT (sticky headers, month tree, scroll landing) be screenshotted
-/// headlessly on a machine that can't tap the simulator — see PORTING_NOTES "Headless UI harness".
+/// Enabled only on the simulator via launch args, e.g.:
+///   xcrun simctl launch <sim> com.anant.MediaCurator -uiGalleryScroll        # drive + scroll gallery
+///   xcrun simctl launch <sim> com.anant.MediaCurator -uiGalleryScroll -uiCollapse   # + collapse (p2)
+///   xcrun simctl launch <sim> com.anant.MediaCurator -uiTrash                # stage items, open Trash
+/// Lets screen LAYOUT be screenshotted headlessly on a machine that can't tap the sim — see
+/// PORTING_NOTES "Headless UI harness".
 enum UITestHooks {
     #if DEBUG
-    static var galleryScroll: Bool { CommandLine.arguments.contains("-uiGalleryScroll") }
-    /// After driving April open + scrolling deep, collapse April from that scrolled position —
-    /// reproduces the "blank screen after collapsing a scrolled month" (p2) bug for a screenshot.
-    static var collapseAfterScroll: Bool { CommandLine.arguments.contains("-uiCollapse") }
+    private static var args: Set<String> { Set(CommandLine.arguments) }
+    /// Drive the gallery open + scroll deep.
+    static var galleryScroll: Bool { args.contains("-uiGalleryScroll") }
+    /// After scrolling, collapse the month (reproduces the p2 blank-after-collapse scenario).
+    static var collapseAfterScroll: Bool { args.contains("-uiCollapse") }
+    /// Stage a few items and open the Trash screen.
+    static var trash: Bool { args.contains("-uiTrash") }
+    /// Any test mode: gates the synthetic data + PhotoKit bypasses (so nothing prompts).
+    static var synthetic: Bool { galleryScroll || trash }
     #else
     static let galleryScroll = false
     static let collapseAfterScroll = false
+    static let trash = false
+    static let synthetic = false
     #endif
 }

@@ -18,7 +18,7 @@ final class MediaRepository {
     func fetchAllMedia() async -> [MediaItem] {
         // Screenshot-test hook only: return a synthetic tree with NO PhotoKit access at all, so the
         // (untappable) photo-permission prompt never fires. Lets gallery LAYOUT be verified headlessly.
-        if UITestHooks.galleryScroll { return Self.syntheticTestMedia() }
+        if UITestHooks.synthetic { return Self.syntheticTestMedia() }
 
         let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         guard status == .authorized || status == .limited else { return [] }

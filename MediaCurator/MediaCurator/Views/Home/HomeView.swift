@@ -126,6 +126,13 @@ struct HomeView: View {
                 if path.isEmpty { path.append(NavDestination.gallery(monthKey: nil)) }
                 return
             }
+            if UITestHooks.trash {
+                Self.demoShownThisProcess = true
+                // Stage ~24 synthetic April-camera items so the Trash isn't empty, then open it.
+                prefs.setStagedForDeletion(Set((12...35).map { "test-\($0)" }))
+                if path.isEmpty { path.append(NavDestination.trash) }
+                return
+            }
             // Mandatory first-run demo: once per process, unless opted out (spec §13).
             if !Self.demoShownThisProcess && !prefs.isDemoOptedOut() {
                 Self.demoShownThisProcess = true

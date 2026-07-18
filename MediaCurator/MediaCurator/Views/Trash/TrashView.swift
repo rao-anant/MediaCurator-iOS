@@ -5,6 +5,13 @@ struct TrashView: View {
 
     @StateObject private var vm = TrashViewModel()
     @State private var showingDeleteConfirm = false
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+
+    /// Fixed column count (like the gallery) rather than adaptive — adaptive packs many small tiles
+    /// on a wide iPad. 3 on iPhone, 5 on iPad => big, legible photos on both.
+    private var gridColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 2), count: hSizeClass == .regular ? 5 : 3)
+    }
 
     var body: some View {
         Group {
@@ -27,28 +34,30 @@ struct TrashView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()
 
-            List {
-                ForEach(vm.items) { item in
-                    HStack(spacing: 12) {
+            // Grid of large tiles (like the gallery / the Android trash) — the photos are the point,
+            // so they get the space; the size rides along as MediaThumbnailView's small badge, and a
+            // tap-target restore chip sits in the corner. Adaptive columns => bigger tiles on iPad.
+            ScrollView {
+                LazyVGrid(columns: gridColumns, spacing: 2) {
+                    ForEach(vm.items) { item in
                         MediaThumbnailView(cell: .init(mediaItem: item, monthKey: "",
                                                        indexInMonth: 0, dateLabel: nil,
                                                        structuralVersion: 0)) {}
-                            .frame(width: 56, height: 56)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(item.displayName).font(.subheadline).lineLimit(1)
-                            Text(Formatters.bytes(item.size))
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button("Restore") { vm.restore(item) }
-                            .font(.subheadline)
-                            .buttonStyle(.bordered)
+                            .overlay(alignment: .topTrailing) {
+                                Button { vm.restore(item) } label: {
+                                    Image(systemName: "arrow.uturn.backward.circle.fill")
+                                        .font(.title2)
+                                        .symbolRenderingMode(.palette)
+                                        .foregroundStyle(.white, .black.opacity(0.55))
+                                        .padding(5)
+                                }
+                                .buttonStyle(.plain)
+                            }
                     }
-                    .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
                 }
+                .padding(.horizontal, 2)
             }
-            .listStyle(.plain)
 
             // Commit bar
             VStack(spacing: 8) {
