@@ -25,12 +25,15 @@ enum UITestHooks {
     static var place: Bool { args.contains("-uiPlace") }
     /// Open two months so the previous-month pill appears.
     static var prevMonth: Bool { args.contains("-uiPrevMonth") }
+    /// Open a month, then scroll far past it into a LATER year — answers whether the pinned bar is
+    /// positional (relabels to the year on screen) or frozen to whatever month is open.
+    static var crossYear: Bool { args.contains("-uiCrossYear") }
     /// Enter photo selection mode programmatically — isolates "does the state change pop the
     /// gallery?" from "does the long-press gesture pop it?", which a tap-less harness can't
     /// otherwise separate.
     static var select: Bool { args.contains("-uiSelect") }
     /// Any test mode: gates the synthetic data + PhotoKit bypasses (so nothing prompts).
-    static var synthetic: Bool { galleryScroll || trash || freeSpace || place || prevMonth || select }
+    static var synthetic: Bool { galleryScroll || trash || freeSpace || place || prevMonth || select || crossYear }
     #else
     static let galleryScroll = false
     static let collapseAfterScroll = false
@@ -39,6 +42,7 @@ enum UITestHooks {
     static let place = false
     static let prevMonth = false
     static let select = false
+    static let crossYear = false
     static let synthetic = false
     #endif
 }

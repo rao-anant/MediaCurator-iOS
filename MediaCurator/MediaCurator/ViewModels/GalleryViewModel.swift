@@ -441,11 +441,29 @@ final class GalleryViewModel: ObservableObject {
     /// drives the accordion to "April 2024 > Camera open, scrolled to the bottom" so the sticky-header
     /// rendering at a deep scroll position can be captured on a machine that can't tap the simulator.
     func uiTestDriveIfRequested() {
-        guard UITestHooks.galleryScroll || UITestHooks.prevMonth || UITestHooks.select, !uiTestDriven else { return }
+        guard UITestHooks.galleryScroll || UITestHooks.prevMonth || UITestHooks.select || UITestHooks.crossYear, !uiTestDriven else { return }
         uiTestDriven = true
 
         // prevMonth: open one month, then a second one, so the first becomes "previous" and the
         // jump-back pill appears naming it (design debate Topic 1). Verifies the pill's layout.
+        // Open April 2024, then scroll all the way down to 2026 — well past the open month, into a
+        // different year. Whatever the bar reads at that point settles Topic 2's question for iOS.
+        if UITestHooks.crossYear {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                setSortMode(.dateOldest)          // deterministic ordering for the scroll target
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if !expandedYears.contains(2024) { toggleYearExpansion(2024) }
+                try? await Task.sleep(nanoseconds: 600_000_000)
+                if !expandedMonths.contains("2024-04") { toggleMonthExpansion("2024-04") }
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                if !expandedSubGroups.contains("2024-04:cam") { toggleSubGroupExpansion("2024-04:cam") }
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                requestScroll(toID: "year-2026")   // far past the open month, into another year
+            }
+            return
+        }
+
         // Drive into a photo grid, then flip selection mode on WITHOUT a gesture. If the gallery
         // still pops back to Home, the state change is to blame; if it stays put, the long-press
         // gesture is.
