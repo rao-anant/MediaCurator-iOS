@@ -586,7 +586,15 @@ struct GalleryView: View {
                 // position. Nudge it a few times across the settle window — once the target is at
                 // the top the later calls are no-ops, so it lands reliably without visible jank.
                 guard let req else { return }
-                let anchor: UnitPoint = req.belowSticky ? belowStickyAnchor : .top
+                // A collapse (gentle) can leave the viewport scrolled PAST the new, shorter content —
+                // the target row is then far above and the LazyVStack has dropped it, so scrollTo(it)
+                // does nothing and the screen stays blank (p2). Reset to the non-lazy `gallery-top`
+                // anchor first — always instantiated, so it reliably yanks the viewport back into the
+                // content — which re-instantiates rows near the top; the target scroll below then
+                // lands (or, for a target far down a huge library, harmlessly stays near the top).
+                // gentle also uses a nil anchor = minimum scroll to reveal, so it never re-overshoots.
+                if req.gentle { proxy.scrollTo("gallery-top", anchor: .top) }
+                let anchor: UnitPoint? = req.gentle ? nil : (req.belowSticky ? belowStickyAnchor : .top)
                 // Nudge across the settle window (the accordion collapses other months and the grid
                 // lays out after the first tick). The anchor is constant, so these converge instead
                 // of chasing a bar height they themselves change.

@@ -78,6 +78,26 @@ Android codebase.
   line to keep the bar slim. Also made all three pinned rows fully opaque — at `opacity(0.96)`
   the real row ghosted through the bar as it scrolled underneath.
 
+## 7. (iOS-only) Blank screen after collapsing a scrolled-into month (p2)
+- **Symptom:** Open a month, scroll deep into its photos, collapse it → the whole gallery goes
+  blank below the sort bar. Reported on device for the whole port; never reproduced headlessly
+  until now because it is **sort-dependent**.
+- **Trigger:** it only happens when the collapsed month is near the BOTTOM of the list, so after
+  collapse there isn't a screenful of content below it. Under the default "Oldest first" the opened
+  month (2024/April in the test data) is near the TOP, so it never showed; under "Most items per
+  month" (years descending → 2024 last → April near the end) it reproduces every time.
+- **Root cause:** collapsing removes the month's photos, leaving the ScrollView scrolled far PAST
+  the new, shorter content. The recovery `scrollTo("month-<key>")` can't fix it because the
+  LazyVStack has dropped that row (it's far above the blank viewport and not instantiated), so
+  `scrollTo` to it is a no-op — the view stays blank. This is a SwiftUI ScrollViewReader limitation:
+  it can't reliably scroll to a non-instantiated lazy row.
+- **Fix:** on collapse, first `scrollTo("gallery-top")` — a non-lazy anchor OUTSIDE the LazyVStack,
+  so it's always instantiated and reliably pulls the viewport back into the content — then scroll to
+  the collapsed month (gentle / nil anchor = minimum scroll, so it can't re-overshoot). Two-stage,
+  in `GalleryView`'s `scrollRequest` handler, gated on the new `ScrollRequest.gentle` flag.
+- **Android check:** none — Android's `scrollToPositionWithOffset(pos, offset)` scrolls by index and
+  handles non-instantiated rows, so RecyclerView never had this. iOS-only.
+
 ---
 
 ### Excluded (iOS/Swift-only — do NOT apply to Android)

@@ -430,10 +430,15 @@ final class GalleryViewModel: ObservableObject {
     /// `belowSticky` = land the target just under the floating sticky bar (used only when opening a
     /// month, so its sub-header + first row clear the bar). For collapses and year-open we land at
     /// the true top instead, so the sticky bar shows the row the user acted on — not the one above it.
-    struct ScrollRequest: Equatable { let id: String; let token: UUID; let belowSticky: Bool }
+    /// `gentle` = scroll the MINIMUM needed to bring the target on screen (anchor nil), instead of
+    /// forcing it to the top. Forcing `.top` overshoots when the target sits in the last screenful —
+    /// there's nothing below to fill the viewport, so the content scrolls clean past its end and the
+    /// screen goes blank (p2: collapse a month near the bottom of the list, which happens under any
+    /// sort where its year is last, e.g. "Most items per month"). Used for collapses.
+    struct ScrollRequest: Equatable { let id: String; let token: UUID; let belowSticky: Bool; let gentle: Bool }
     @Published var scrollRequest: ScrollRequest? = nil
-    private func requestScroll(toID id: String, belowSticky: Bool = false) {
-        scrollRequest = ScrollRequest(id: id, token: UUID(), belowSticky: belowSticky)
+    private func requestScroll(toID id: String, belowSticky: Bool = false, gentle: Bool = false) {
+        scrollRequest = ScrollRequest(id: id, token: UUID(), belowSticky: belowSticky, gentle: gentle)
     }
 
     private var uiTestDriven = false
@@ -500,6 +505,12 @@ final class GalleryViewModel: ObservableObject {
 
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 900_000_000)
+            // p2 reproduces only under a sort where the opened month is near the BOTTOM of the list
+            // (so after collapse there isn't a screenful below it). "Most items per month" puts 2024
+            // last, so April sits near the end — deterministically triggering the blank-after-collapse
+            // that the default "Oldest first" (2024 first, April near top) never showed.
+            if UITestHooks.collapseAfterScroll { setSortMode(.countPerMonth) }
+            try? await Task.sleep(nanoseconds: 400_000_000)
             if !expandedYears.contains(2024) { toggleYearExpansion(2024) }
             try? await Task.sleep(nanoseconds: 700_000_000)
             if !expandedMonths.contains("2024-04") { toggleMonthExpansion("2024-04") }
@@ -532,8 +543,9 @@ final class GalleryViewModel: ObservableObject {
             openSubGroupKey = nil
             hideBarState = .none
             // Keep the month the user just closed in view — collapsing removed its photos, which
-            // otherwise let the header drift above the top of the screen (see ph4).
-            requestScroll(toID: "month-\(key)")
+            // otherwise let the header drift above the top of the screen (see ph4). Gentle so a month
+            // near the list bottom doesn't overshoot into a blank screen (p2).
+            requestScroll(toID: "month-\(key)", gentle: true)
         } else {
             // The month we're leaving becomes "previous" — drives the jump-back pill (design
             // debate Topic 1). "The month you left, however you left it."
