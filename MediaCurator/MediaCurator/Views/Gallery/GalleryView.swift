@@ -616,12 +616,16 @@ struct GalleryView: View {
                 // gentle also uses a nil anchor = minimum scroll to reveal, so it never re-overshoots.
                 if req.gentle { proxy.scrollTo("gallery-top", anchor: .top) }
                 let anchor: UnitPoint? = req.gentle ? nil : (req.belowSticky ? belowStickyAnchor : .top)
-                // Nudge across the settle window (the accordion collapses other months and the grid
-                // lays out after the first tick). The anchor is constant, so these converge instead
-                // of chasing a bar height they themselves change.
-                for delay in [0.05, 0.2, 0.4, 0.65] {
+                // Land the target with an INSTANT snap, not an animated slide. Switching months
+                // already restructures the list instantly (the accordion diff isn't animated), so a
+                // 0.65s animated scroll on top slid all the intervening photos past the viewport —
+                // the "lots of movement / eye strain" the user reported. Snapping puts the new month
+                // in place in one step. Still nudged across the settle window (the accordion collapse
+                // + grid layout finish over a few ticks) so it lands on the target's FINAL position;
+                // with no animation the early corrections are imperceptible instead of a visible slide.
+                for delay in [0.0, 0.15, 0.35, 0.6] {
                     DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                        withAnimation(.easeInOut(duration: 0.2)) { proxy.scrollTo(req.id, anchor: anchor) }
+                        proxy.scrollTo(req.id, anchor: anchor)
                     }
                 }
             }

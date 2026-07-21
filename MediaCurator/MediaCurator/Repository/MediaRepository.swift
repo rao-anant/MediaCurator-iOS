@@ -124,7 +124,7 @@ final class MediaRepository {
             add(2024, 9, 12, wa: false)
             return items
         }
-        if UITestHooks.crossYear || UITestHooks.scrollUp {
+        if UITestHooks.crossYear || UITestHooks.scrollUp || UITestHooks.switchMonth {
             add(2024, 2, 12, wa: false)
             add(2024, 4, 40, wa: false); add(2024, 4, 8, wa: true)
             for m in 5...12 { add(2024, m, 8 + m, wa: false) }

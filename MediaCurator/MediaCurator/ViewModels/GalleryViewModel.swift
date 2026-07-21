@@ -446,7 +446,7 @@ final class GalleryViewModel: ObservableObject {
     /// drives the accordion to "April 2024 > Camera open, scrolled to the bottom" so the sticky-header
     /// rendering at a deep scroll position can be captured on a machine that can't tap the simulator.
     func uiTestDriveIfRequested() {
-        guard UITestHooks.galleryScroll || UITestHooks.prevMonth || UITestHooks.select || UITestHooks.crossYear || UITestHooks.scrollUp || UITestHooks.midMonth, !uiTestDriven else { return }
+        guard UITestHooks.galleryScroll || UITestHooks.prevMonth || UITestHooks.select || UITestHooks.crossYear || UITestHooks.scrollUp || UITestHooks.midMonth || UITestHooks.switchMonth, !uiTestDriven else { return }
         uiTestDriven = true
 
         // prevMonth: open one month, then a second one, so the first becomes "previous" and the
@@ -507,6 +507,27 @@ final class GalleryViewModel: ObservableObject {
                 if !expandedSubGroups.contains("2024-06:cam") { toggleSubGroupExpansion("2024-06:cam") }
                 try? await Task.sleep(nanoseconds: 1_200_000_000)
                 requestScroll(toID: "test-72")   // ~middle of June's 120 photos (test-12…131)
+            }
+            return
+        }
+
+        // switchMonth: open April, scroll into its photos, then open June 2025 well below — the
+        // month-switch whose relayout the user found jarring. Captures where it settles.
+        if UITestHooks.switchMonth {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                setSortMode(.dateOldest)
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if !expandedYears.contains(2024) { toggleYearExpansion(2024) }
+                if !expandedYears.contains(2025) { toggleYearExpansion(2025) }
+                try? await Task.sleep(nanoseconds: 600_000_000)
+                if !expandedMonths.contains("2024-04") { toggleMonthExpansion("2024-04") }
+                try? await Task.sleep(nanoseconds: 600_000_000)
+                if !expandedSubGroups.contains("2024-04:cam") { toggleSubGroupExpansion("2024-04:cam") }
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                requestScroll(toID: "sub-2024-04:wa", belowSticky: true)   // scroll deep into April
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                toggleMonthExpansion("2025-06")   // now SWITCH to a month well below
             }
             return
         }
