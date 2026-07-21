@@ -87,14 +87,32 @@ struct GalleryView: View {
         return fy <= 0
     }
 
-    /// True while the viewport is inside the open month's content: its header has reached/passed the
-    /// top (or been dropped as we scrolled deep into its grid), and we haven't scrolled past its
-    /// footer. This is the only case with an "enclosing month context" — a COLLAPSED month scrolled
-    /// under the bar is just a row, not something you're inside, so it gets no month line.
+    /// The month whose header is at/above the top of the viewport — the month the top of the list is
+    /// currently inside. "M:2024-09|September 2024" → "2024-09". nil when no month header has reached
+    /// the top (at the very top of a year, or deep inside a long month whose header the lazy list
+    /// dropped above us).
+    private var topMonthKey: String? {
+        sectionAboveFold("M:").map { String($0.dropFirst(2).prefix(7)) }
+    }
+
+    /// True while the viewport is inside the open month's content — the only case with an "enclosing
+    /// month context" (a collapsed month scrolled under the bar is just a row, not something you're
+    /// inside). Derived positionally rather than from "is the open month's header dropped": that
+    /// dropped-⇒-inside shortcut was wrong when you scroll UP away from an open month — its header
+    /// drops because it's now far BELOW you, and the bar wrongly kept pinning it (e.g. opened Mar 2023
+    /// at the bottom, scrolled up to Sep 2024, and "Mar 2023" reappeared and stuck).
     private var withinOpenMonth: Bool {
-        guard vm.openMonthKey != nil, !openMonthScrolledPast else { return false }
-        guard let y = headerY(prefix: "M:\(vm.openMonthKey!)|") else { return true }  // dropped ⇒ deep inside
-        return y <= stickyYearRowH
+        guard let open = vm.openMonthKey, !openMonthScrolledPast else { return false }
+        // If a month header is at the top of the viewport, we're inside THAT month — only the open
+        // one counts.
+        if let top = topMonthKey { return top == open }
+        // No month header at the top: either deep inside the (long) open month with its header
+        // dropped above us, or scrolled up above all months. The open month's footer disambiguates —
+        // if it's still below the top (fy > 0) the viewport is above the footer, i.e. inside; a
+        // dropped/❌ footer means the month is far below and we are above it, not in it.
+        if let fy = headerPositions["F:\(open)"] { return fy > 0 }
+        if let hy = headerY(prefix: "M:\(open)|") { return hy <= stickyYearRowH }
+        return false
     }
 
     /// Year line — positional, and robust to the lazy list dropping the (far-above) year header.

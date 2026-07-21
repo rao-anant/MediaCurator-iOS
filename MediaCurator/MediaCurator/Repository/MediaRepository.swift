@@ -118,7 +118,7 @@ final class MediaRepository {
         // (the standard set is only ~1.5 screens, so an open month's tail always stays visible — which
         // is exactly why it can't exhibit the scrolled-past-open-month state). Give it a tall open
         // April plus a full year of collapsed months after it, then 2025/2026.
-        if UITestHooks.crossYear {
+        if UITestHooks.crossYear || UITestHooks.scrollUp {
             add(2024, 2, 12, wa: false)
             add(2024, 4, 40, wa: false); add(2024, 4, 8, wa: true)
             for m in 5...12 { add(2024, m, 8 + m, wa: false) }

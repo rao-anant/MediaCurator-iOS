@@ -446,7 +446,7 @@ final class GalleryViewModel: ObservableObject {
     /// drives the accordion to "April 2024 > Camera open, scrolled to the bottom" so the sticky-header
     /// rendering at a deep scroll position can be captured on a machine that can't tap the simulator.
     func uiTestDriveIfRequested() {
-        guard UITestHooks.galleryScroll || UITestHooks.prevMonth || UITestHooks.select || UITestHooks.crossYear, !uiTestDriven else { return }
+        guard UITestHooks.galleryScroll || UITestHooks.prevMonth || UITestHooks.select || UITestHooks.crossYear || UITestHooks.scrollUp, !uiTestDriven else { return }
         uiTestDriven = true
 
         // prevMonth: open one month, then a second one, so the first becomes "previous" and the
@@ -467,6 +467,27 @@ final class GalleryViewModel: ObservableObject {
                 // All the way to the bottom, so April's footer clears the top and the viewport shows
                 // a later year while April is still the open month — the scrolled-past-open state.
                 requestScroll(toID: "gallery-bottom")
+            }
+            return
+        }
+
+        // scrollUp: open a month near the BOTTOM, scroll into it, then scroll UP to a much earlier
+        // month. The open month is now far BELOW the viewport — the bar must NOT keep pinning it
+        // (the "opened Mar 2023, scrolled up to Sep 2024, and Mar 2023 reappeared" bug).
+        if UITestHooks.scrollUp {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                setSortMode(.dateOldest)          // 2024 → 2025 → 2026; bottom month is Dec 2025-ish
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if !expandedYears.contains(2024) { toggleYearExpansion(2024) }
+                if !expandedYears.contains(2025) { toggleYearExpansion(2025) }
+                if !expandedYears.contains(2026) { toggleYearExpansion(2026) }
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                if !expandedMonths.contains("2025-12") { toggleMonthExpansion("2025-12") }  // near-bottom month
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                if !expandedSubGroups.contains("2025-12:cam") { toggleSubGroupExpansion("2025-12:cam") }
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                requestScroll(toID: "month-2024-06", gentle: true)   // scroll UP to June 2024 (well above)
             }
             return
         }
