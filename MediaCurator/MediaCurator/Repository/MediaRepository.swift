@@ -114,6 +114,18 @@ final class MediaRepository {
                     relativePath: wa ? "DCIM/WhatsApp Images/" : "DCIM/Camera/"))
             }
         }
+        // crossYear needs enough content BELOW an open month to scroll that month clean off the top
+        // (the standard set is only ~1.5 screens, so an open month's tail always stays visible — which
+        // is exactly why it can't exhibit the scrolled-past-open-month state). Give it a tall open
+        // April plus a full year of collapsed months after it, then 2025/2026.
+        if UITestHooks.crossYear {
+            add(2024, 2, 12, wa: false)
+            add(2024, 4, 40, wa: false); add(2024, 4, 8, wa: true)
+            for m in 5...12 { add(2024, m, 8 + m, wa: false) }
+            for m in 1...12 { add(2025, m, 6 + m, wa: false) }
+            add(2026, 2, 10, wa: false); add(2026, 5, 10, wa: false)
+            return items
+        }
         add(2024, 2, 12, wa: false)
         add(2024, 4, 40, wa: false); add(2024, 4, 8, wa: true)   // big enough to scroll the header off
         add(2024, 7, 15, wa: false)

@@ -59,10 +59,16 @@ struct GalleryView: View {
     /// visibility, because `stickyMonthLabel` needs it as a lookup key even when nothing is pinned.
     private var stickyYearCandidate: String? {
         guard vm.sortMode != .sizeAbsolute else { return nil }
-        // An open month pins its own year (avoids the strip going blank / wrong for short months).
-        if let open = vm.openMonthKey { return String(open.prefix(4)) }
+        // An open month pins its own year (avoids the strip going blank / wrong for short months) —
+        // but ONLY while we're still within it. Once scrolled clean past the month, fall through to
+        // positional derivation so the year tracks the content on screen (e.g. reads 2025 after you
+        // scroll out of an open April 2024 into 2025), rather than staying frozen on the open month.
+        if let open = vm.openMonthKey, !openMonthScrolledPast { return String(open.prefix(4)) }
         let ys = headerPositions.filter { $0.key.hasPrefix("Y:") && $0.value <= 0 }
-        guard let top = ys.max(by: { $0.value < $1.value }) else { return nil }
+        guard let top = ys.max(by: { $0.value < $1.value }) else {
+            // Nothing scrolled past the top yet: keep the open month's year rather than blank.
+            return vm.openMonthKey.map { String($0.prefix(4)) }
+        }
         return String(top.key.dropFirst(2))
     }
 
@@ -101,14 +107,26 @@ struct GalleryView: View {
         headerPositions.first { $0.key.hasPrefix(prefix) }?.value
     }
 
+    /// True once the open month's content has scrolled ENTIRELY above the viewport top — i.e. its
+    /// footer (which sits after its last photo) is at/above y=0. Past that point the viewport shows
+    /// later months / years, so pinning "April 2024" over them is a lie (the `-uiCrossYear` bug: the
+    /// bar read "2024 / April 2024" while July–Nov 2024 and the 2025/2026 rows were on screen).
+    /// Default to false when the footer's position is unknown (lazy list dropped it because we're
+    /// deep INSIDE the month, far above the footer) so the month stays pinned while you're in it.
+    private var openMonthScrolledPast: Bool {
+        guard let open = vm.openMonthKey, let fy = headerPositions["F:\(open)"] else { return false }
+        return fy <= 0
+    }
+
     /// Pin the open month ONLY while its real in-list header isn't visible below the year bar —
     /// otherwise "April 2024" shows twice (pinned + in-list). A missing position means the lazy list
     /// dropped the row, i.e. it's scrolled far away, so we pin. (The pre-existing code had this
     /// polarity backwards — absent was read as "no month" and the label vanished mid-month, which is
     /// why it was made unconditional; that caused the duplicate.) Matches Android, whose bar shows
-    /// only the year while the real month header is on screen.
+    /// only the year while the real month header is on screen. Also drop it once we've scrolled clean
+    /// past the month, so the bar doesn't keep claiming a month no longer on screen.
     private var showStickyMonth: Bool {
-        guard vm.openMonthKey != nil else { return false }
+        guard vm.openMonthKey != nil, !openMonthScrolledPast else { return false }
         guard let y = headerY(prefix: "M:\(vm.openMonthKey!)|") else { return true }
         return y <= stickyYearRowH
     }
@@ -139,7 +157,7 @@ struct GalleryView: View {
     /// it must survive the lazy list dropping the row — but WHETHER to pin it is positional, so it
     /// doesn't duplicate the real row while that's on screen.
     private var stickySub: (key: String, label: String)? {
-        guard vm.sortMode != .sizeAbsolute, vm.openMonthKey != nil,
+        guard vm.sortMode != .sizeAbsolute, vm.openMonthKey != nil, !openMonthScrolledPast,
               let key = vm.openSubGroupKey, showStickySub else { return nil }
         return (key, vm.openSubGroupLabel)
     }
@@ -551,7 +569,7 @@ struct GalleryView: View {
                     // Hide/hint bar — otherwise the footer sits behind the bar, its onAppear
                     // never fires, and the walk gate can't register "reached the end" (spec §3
                     // "never covers content"; fixes Hide not appearing at the true bottom).
-                    Color.clear.frame(height: 96)
+                    Color.clear.frame(height: 96).id("gallery-bottom")
                 }
             }
             .coordinateSpace(name: "galleryScroll")

@@ -459,7 +459,9 @@ final class GalleryViewModel: ObservableObject {
                 try? await Task.sleep(nanoseconds: 900_000_000)
                 if !expandedSubGroups.contains("2024-04:cam") { toggleSubGroupExpansion("2024-04:cam") }
                 try? await Task.sleep(nanoseconds: 1_200_000_000)
-                requestScroll(toID: "year-2026")   // far past the open month, into another year
+                // All the way to the bottom, so April's footer clears the top and the viewport shows
+                // a later year while April is still the open month — the scrolled-past-open state.
+                requestScroll(toID: "gallery-bottom")
             }
             return
         }
