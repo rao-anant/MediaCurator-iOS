@@ -87,32 +87,27 @@ struct GalleryView: View {
         return fy <= 0
     }
 
-    /// The month whose header is at/above the top of the viewport — the month the top of the list is
-    /// currently inside. "M:2024-09|September 2024" → "2024-09". nil when no month header has reached
-    /// the top (at the very top of a year, or deep inside a long month whose header the lazy list
-    /// dropped above us).
-    private var topMonthKey: String? {
-        sectionAboveFold("M:").map { String($0.dropFirst(2).prefix(7)) }
+    /// The month the TOP of the viewport is currently inside — from whichever month HEADER or photo
+    /// GRID has scrolled to/under the top (greatest y that's still at/above the bar). Considering the
+    /// grid (keyed "G:<monthKey>", always rendered while you scroll its photos) is what makes this
+    /// survive deep inside a long month where the header + footer are both dropped. nil at the very
+    /// top of a year (nothing has reached the top yet). Purely positional — no latch — so scrolling
+    /// UP away from an open month (its header drops BELOW you) correctly stops naming it.
+    private var currentMonthKey: String? {
+        let candidates = headerPositions.filter {
+            ($0.key.hasPrefix("M:") || $0.key.hasPrefix("G:")) && $0.value <= stickyYearRowH
+        }
+        guard let top = candidates.max(by: { $0.value < $1.value }) else { return nil }
+        return top.key.hasPrefix("M:") ? String(top.key.dropFirst(2).prefix(7))   // "M:2024-09|…" → "2024-09"
+                                       : String(top.key.dropFirst(2))              // "G:2024-06"   → "2024-06"
     }
 
     /// True while the viewport is inside the open month's content — the only case with an "enclosing
     /// month context" (a collapsed month scrolled under the bar is just a row, not something you're
-    /// inside). Derived positionally rather than from "is the open month's header dropped": that
-    /// dropped-⇒-inside shortcut was wrong when you scroll UP away from an open month — its header
-    /// drops because it's now far BELOW you, and the bar wrongly kept pinning it (e.g. opened Mar 2023
-    /// at the bottom, scrolled up to Sep 2024, and "Mar 2023" reappeared and stuck).
+    /// inside).
     private var withinOpenMonth: Bool {
         guard let open = vm.openMonthKey, !openMonthScrolledPast else { return false }
-        // If a month header is at the top of the viewport, we're inside THAT month — only the open
-        // one counts.
-        if let top = topMonthKey { return top == open }
-        // No month header at the top: either deep inside the (long) open month with its header
-        // dropped above us, or scrolled up above all months. The open month's footer disambiguates —
-        // if it's still below the top (fy > 0) the viewport is above the footer, i.e. inside; a
-        // dropped/❌ footer means the month is far below and we are above it, not in it.
-        if let fy = headerPositions["F:\(open)"] { return fy > 0 }
-        if let hy = headerY(prefix: "M:\(open)|") { return hy <= stickyYearRowH }
-        return false
+        return currentMonthKey == open
     }
 
     /// Year line — positional, and robust to the lazy list dropping the (far-above) year header.
@@ -128,10 +123,9 @@ struct GalleryView: View {
     private var stickyYear: String? {
         guard vm.sortMode != .sizeAbsolute else { return nil }
         if let key = sectionAboveFold("Y:") { return String(key.dropFirst(2)) }
-        let months = headerPositions.filter { $0.key.hasPrefix("M:") && $0.value <= stickyYearRowH }
-        if let top = months.max(by: { $0.value < $1.value }) {
-            return String(top.key.dropFirst(2).prefix(4))   // "M:2024-05|May 2024" → "2024"
-        }
+        // The year of the month (header OR grid) at the top — survives when the far-above year header
+        // is dropped, and can't duplicate a visible year row (the bar shows a YEAR, the row a MONTH).
+        if let m = currentMonthKey { return String(m.prefix(4)) }
         if withinOpenMonth, let open = vm.openMonthKey { return String(open.prefix(4)) }
         return nil
     }
@@ -563,6 +557,15 @@ struct GalleryView: View {
                             .padding(.horizontal, 2)
                             .padding(.vertical, 2)
                             .id(blockID)
+                            // Report the grid's top position keyed by its month. Unlike headers, a
+                            // grid block stays rendered (and reporting) the whole time you're scrolling
+                            // through its photos, so it's the reliable "which month am I inside" signal
+                            // deep in a long month where the header + footer have both been dropped.
+                            .background(GeometryReader { g in
+                                Color.clear.preference(
+                                    key: HeaderPosKey.self,
+                                    value: cells.first.map { ["G:\($0.monthKey)": g.frame(in: .named("galleryScroll")).minY] } ?? [:])
+                            })
                         }
                     }
                     // Bottom inset so the last month's footer scrolls clear of the pinned

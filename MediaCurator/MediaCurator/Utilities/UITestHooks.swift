@@ -31,12 +31,15 @@ enum UITestHooks {
     /// Open a month near the BOTTOM, then scroll UP above it — the open month is now BELOW the
     /// viewport. Checks the bar doesn't keep pinning it (the "Mar 2023 reappears at Sep 2024" bug).
     static var scrollUp: Bool { args.contains("-uiScrollUp") }
+    /// Open a VERY long month and scroll into the MIDDLE of its photos, where the month header
+    /// (far above) and footer (far below) are both dropped — checks the bar doesn't vanish there.
+    static var midMonth: Bool { args.contains("-uiMidMonth") }
     /// Enter photo selection mode programmatically — isolates "does the state change pop the
     /// gallery?" from "does the long-press gesture pop it?", which a tap-less harness can't
     /// otherwise separate.
     static var select: Bool { args.contains("-uiSelect") }
     /// Any test mode: gates the synthetic data + PhotoKit bypasses (so nothing prompts).
-    static var synthetic: Bool { galleryScroll || trash || freeSpace || place || prevMonth || select || crossYear || scrollUp }
+    static var synthetic: Bool { galleryScroll || trash || freeSpace || place || prevMonth || select || crossYear || scrollUp || midMonth }
     #else
     static let galleryScroll = false
     static let collapseAfterScroll = false
@@ -47,6 +50,7 @@ enum UITestHooks {
     static let select = false
     static let crossYear = false
     static let scrollUp = false
+    static let midMonth = false
     static let synthetic = false
     #endif
 }

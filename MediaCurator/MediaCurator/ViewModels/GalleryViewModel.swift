@@ -446,7 +446,7 @@ final class GalleryViewModel: ObservableObject {
     /// drives the accordion to "April 2024 > Camera open, scrolled to the bottom" so the sticky-header
     /// rendering at a deep scroll position can be captured on a machine that can't tap the simulator.
     func uiTestDriveIfRequested() {
-        guard UITestHooks.galleryScroll || UITestHooks.prevMonth || UITestHooks.select || UITestHooks.crossYear || UITestHooks.scrollUp, !uiTestDriven else { return }
+        guard UITestHooks.galleryScroll || UITestHooks.prevMonth || UITestHooks.select || UITestHooks.crossYear || UITestHooks.scrollUp || UITestHooks.midMonth, !uiTestDriven else { return }
         uiTestDriven = true
 
         // prevMonth: open one month, then a second one, so the first becomes "previous" and the
@@ -488,6 +488,25 @@ final class GalleryViewModel: ObservableObject {
                 if !expandedSubGroups.contains("2025-12:cam") { toggleSubGroupExpansion("2025-12:cam") }
                 try? await Task.sleep(nanoseconds: 1_200_000_000)
                 requestScroll(toID: "month-2024-06", gentle: true)   // scroll UP to June 2024 (well above)
+            }
+            return
+        }
+
+        // midMonth: open a very long month and land deep in its MIDDLE, where its header (far above)
+        // and footer (far below) are both dropped by the lazy list — the bar must still show
+        // year + month there (it used to vanish entirely).
+        if UITestHooks.midMonth {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                setSortMode(.dateOldest)
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if !expandedYears.contains(2024) { toggleYearExpansion(2024) }
+                try? await Task.sleep(nanoseconds: 600_000_000)
+                if !expandedMonths.contains("2024-06") { toggleMonthExpansion("2024-06") }
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                if !expandedSubGroups.contains("2024-06:cam") { toggleSubGroupExpansion("2024-06:cam") }
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                requestScroll(toID: "test-72")   // ~middle of June's 120 photos (test-12…131)
             }
             return
         }
