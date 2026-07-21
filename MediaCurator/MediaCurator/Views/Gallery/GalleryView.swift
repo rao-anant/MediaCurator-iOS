@@ -53,52 +53,16 @@ struct GalleryView: View {
         return max(240, (w / CGFloat(columnCount)) * displayScale)
     }
 
-    /// Sticky context (spec §3): the year always, the month when scrolled into one. Derived from
-    /// the closest header that has scrolled to/above the top. Hidden in flat size-sort mode.
-    /// WHICH year the bar is about — model/position derived, and deliberately not gated on
-    /// visibility, because `stickyMonthLabel` needs it as a lookup key even when nothing is pinned.
-    private var stickyYearCandidate: String? {
-        guard vm.sortMode != .sizeAbsolute else { return nil }
-        // An open month pins its own year (avoids the strip going blank / wrong for short months) —
-        // but ONLY while we're still within it. Once scrolled clean past the month, fall through to
-        // positional derivation so the year tracks the content on screen (e.g. reads 2025 after you
-        // scroll out of an open April 2024 into 2025), rather than staying frozen on the open month.
-        if let open = vm.openMonthKey, !openMonthScrolledPast { return String(open.prefix(4)) }
-        let ys = headerPositions.filter { $0.key.hasPrefix("Y:") && $0.value <= 0 }
-        guard let top = ys.max(by: { $0.value < $1.value }) else {
-            // Nothing scrolled past the top yet: keep the open month's year rather than blank.
-            return vm.openMonthKey.map { String($0.prefix(4)) }
-        }
-        return String(top.key.dropFirst(2))
-    }
+    // MARK: Sticky context derivation (spec §3, design debate Topic 2)
+    //
+    // The pinned bar is a header for the content BENEATH it, so it is derived POSITIONALLY: it names
+    // whatever year / open-month / open-sub-group the top of the viewport is currently inside, and
+    // relabels as you scroll across boundaries. This is deliberately NOT frozen to the month you last
+    // opened (which made the bar assert "April 2024" over 2026's photos), and it structurally avoids
+    // the ph8 duplicate + the float-in/out that the old "hide the bar when the real header shows"
+    // gate caused: a header still BELOW the top (y > 0) is never chosen, so it stays visible in the
+    // list, distinct from the bar, and the bar never needs to hide to dodge a duplicate.
 
-    /// WHETHER to pin it — same rule the month and sub rows already had, which the year row was
-    /// missing (ph8): pin only while the real in-list year row isn't on screen. The open-month
-    /// branch above returns a year unconditionally, so with a month open the bar pinned "2024" even
-    /// while the real "2024  104  4.2 MB" row sat directly beneath it — the same duplicate-header
-    /// bug fixed for months, never applied here. A dropped position means the lazy list discarded
-    /// the row (scrolled far away), so pin.
-    ///
-    /// Gating the whole bar on this is safe: a year header always sits above its own months, so if
-    /// it's on screen the open month is below it and needs no stand-in either.
-    private var stickyYear: String? {
-        guard let year = stickyYearCandidate else { return nil }
-        if let y = headerY(prefix: "Y:\(year)"), y > 0 { return nil }
-        return year
-    }
-
-    /// The model row behind the pinned year, so the bar can carry the same count + size the real
-    /// row shows. Android's sticky year row does this (`tvStickyYearStats`); iOS was dropping the
-    /// figures the moment the real row scrolled off, which read as the numbers disappearing.
-    private func yearHeader(for year: String) -> GalleryItem.YearHeader? {
-        guard let y = Int(year) else { return nil }
-        for item in vm.galleryItems {
-            if case .yearHeader(let h) = item, h.year == y { return h }
-        }
-        return nil
-    }
-    /// Approximate heights of the pinned rows — used to tell when a real (in-list) header has slid
-    /// behind the bar so its pinned stand-in should take over.
     private let stickyYearRowH: CGFloat = 34
     private let stickyMonthRowH: CGFloat = 46
 
@@ -107,58 +71,76 @@ struct GalleryView: View {
         headerPositions.first { $0.key.hasPrefix(prefix) }?.value
     }
 
-    /// True once the open month's content has scrolled ENTIRELY above the viewport top — i.e. its
-    /// footer (which sits after its last photo) is at/above y=0. Past that point the viewport shows
-    /// later months / years, so pinning "April 2024" over them is a lie (the `-uiCrossYear` bug: the
-    /// bar read "2024 / April 2024" while July–Nov 2024 and the 2025/2026 rows were on screen).
-    /// Default to false when the footer's position is unknown (lazy list dropped it because we're
-    /// deep INSIDE the month, far above the footer) so the month stays pinned while you're in it.
+    /// The header of the given kind (`"Y:"`, `"M:"`, `"S:"`) closest to the top FROM ABOVE — i.e. the
+    /// section the viewport is currently inside. nil when none of that kind has reached the top yet
+    /// (so nothing of that level is pinned). Because it only ever returns a header at y ≤ 0, the
+    /// matching in-list row is at/behind the opaque bar, never visible below it → no duplicate.
+    private func sectionAboveFold(_ prefix: String) -> String? {
+        headerPositions.filter { $0.key.hasPrefix(prefix) && $0.value <= 0 }
+            .max(by: { $0.value < $1.value })?.key
+    }
+
+    /// True once the open month's content has scrolled ENTIRELY above the top — its footer is at/above
+    /// y=0. Past that the viewport shows later months, so its month/sub lines must drop.
     private var openMonthScrolledPast: Bool {
         guard let open = vm.openMonthKey, let fy = headerPositions["F:\(open)"] else { return false }
         return fy <= 0
     }
 
-    /// Pin the open month ONLY while its real in-list header isn't visible below the year bar —
-    /// otherwise "April 2024" shows twice (pinned + in-list). A missing position means the lazy list
-    /// dropped the row, i.e. it's scrolled far away, so we pin. (The pre-existing code had this
-    /// polarity backwards — absent was read as "no month" and the label vanished mid-month, which is
-    /// why it was made unconditional; that caused the duplicate.) Matches Android, whose bar shows
-    /// only the year while the real month header is on screen. Also drop it once we've scrolled clean
-    /// past the month, so the bar doesn't keep claiming a month no longer on screen.
-    private var showStickyMonth: Bool {
+    /// True while the viewport is inside the open month's content: its header has reached/passed the
+    /// top (or been dropped as we scrolled deep into its grid), and we haven't scrolled past its
+    /// footer. This is the only case with an "enclosing month context" — a COLLAPSED month scrolled
+    /// under the bar is just a row, not something you're inside, so it gets no month line.
+    private var withinOpenMonth: Bool {
         guard vm.openMonthKey != nil, !openMonthScrolledPast else { return false }
-        guard let y = headerY(prefix: "M:\(vm.openMonthKey!)|") else { return true }
+        guard let y = headerY(prefix: "M:\(vm.openMonthKey!)|") else { return true }  // dropped ⇒ deep inside
         return y <= stickyYearRowH
     }
 
-    /// Same contract for the open sub-group, measured below whatever is pinned above it.
-    private var showStickySub: Bool {
-        guard let key = vm.openSubGroupKey else { return false }
-        let threshold = stickyYearRowH + (showStickyMonth ? stickyMonthRowH : 0)
-        guard let y = headerY(prefix: "S:\(key)") else { return true }
-        return y <= threshold
-    }
-
-    private var stickyMonthLabel: String? {
+    /// Year line — positional, and robust to the lazy list dropping the (far-above) year header.
+    /// Three tiers, in order:
+    ///  1. A year header we've scrolled to/under (strict y≤0, so its own row is behind the bar and
+    ///     can't be duplicated below it).
+    ///  2. Otherwise the year of the top-of-list month — collapsed months report their position too,
+    ///     so this survives when the year header itself has scrolled far off and been dropped. A
+    ///     month header may sit slightly below the fold and still define the year, and since the bar
+    ///     shows a YEAR while that row shows a MONTH, there is no duplicate. (Only kicks in past the
+    ///     year's own header, so it never collides with a visible year row near a year's top.)
+    ///  3. Deep inside the open month, every nearby header is dropped — use the open month's year.
+    private var stickyYear: String? {
         guard vm.sortMode != .sizeAbsolute else { return nil }
-        if vm.openMonthKey != nil {
-            return showStickyMonth ? Formatters.monthLabel(from: vm.openMonthKey!) : nil
+        if let key = sectionAboveFold("Y:") { return String(key.dropFirst(2)) }
+        let months = headerPositions.filter { $0.key.hasPrefix("M:") && $0.value <= stickyYearRowH }
+        if let top = months.max(by: { $0.value < $1.value }) {
+            return String(top.key.dropFirst(2).prefix(4))   // "M:2024-05|May 2024" → "2024"
         }
-        // Candidate, not the gated `stickyYear`: we still need to know which year's months to scan
-        // even at a scroll position where the year row itself isn't pinned.
-        guard let year = stickyYearCandidate else { return nil }
-        let ms = headerPositions.filter { $0.key.hasPrefix("M:\(year)-") && $0.value <= 0 }
-        guard let top = ms.max(by: { $0.value < $1.value }) else { return nil }
-        return top.key.split(separator: "|").last.map(String.init)
+        if withinOpenMonth, let open = vm.openMonthKey { return String(open.prefix(4)) }
+        return nil
     }
 
-    /// The open sub-group ("Camera & Others" / "WhatsApp"), pinned so its collapse chevron stays
-    /// reachable while you scroll its photos. WHICH sub-group is model state (`openSubGroupKey`) —
-    /// it must survive the lazy list dropping the row — but WHETHER to pin it is positional, so it
-    /// doesn't duplicate the real row while that's on screen.
+    /// The model row behind the pinned year, so the bar carries the same count + size the real row
+    /// shows (matches Android's `tvStickyYearStats`).
+    private func yearHeader(for year: String) -> GalleryItem.YearHeader? {
+        guard let y = Int(year) else { return nil }
+        for item in vm.galleryItems {
+            if case .yearHeader(let h) = item, h.year == y { return h }
+        }
+        return nil
+    }
+
+    /// Month line — only the open (expanded) month, and only while inside it. Never preemptively:
+    /// when its real header is still below the year bar (y > row height) the month line stays off so
+    /// it can't duplicate that visible header.
+    private var stickyMonthLabel: String? {
+        guard vm.sortMode != .sizeAbsolute, withinOpenMonth, let open = vm.openMonthKey else { return nil }
+        return Formatters.monthLabel(from: open)
+    }
+
+    /// Sub-group line — the open sub-group, pinned so its collapse chevron stays reachable while you
+    /// scroll its photos, and suppressed until you're actually within it (same no-preempt rule).
     private var stickySub: (key: String, label: String)? {
-        guard vm.sortMode != .sizeAbsolute, vm.openMonthKey != nil, !openMonthScrolledPast,
-              let key = vm.openSubGroupKey, showStickySub else { return nil }
+        guard vm.sortMode != .sizeAbsolute, withinOpenMonth, let key = vm.openSubGroupKey else { return nil }
+        if let y = headerY(prefix: "S:\(key)"), y > stickyYearRowH + stickyMonthRowH { return nil }
         return (key, vm.openSubGroupLabel)
     }
 
@@ -685,7 +667,7 @@ struct GalleryView: View {
         case .subHeader(let s):
             SubHeaderRow(sub: s) { vm.toggleSubGroupExpansion(s.subKey) }
                 // Only an EXPANDED sub-group reports: it's the one that can be pinned, and its
-                // absence (lazy list dropped it) is what tells us to pin. See `showStickySub`.
+                // absence (lazy list dropped it) is what tells us to pin. See `stickySub`.
                 .background(GeometryReader { g in
                     Color.clear.preference(
                         key: HeaderPosKey.self,
