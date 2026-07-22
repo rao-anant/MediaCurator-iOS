@@ -1,22 +1,22 @@
-# App Privacy — exact answers
+# App Privacy - exact answers
 
-App Store Connect → your app → **App Privacy** (left sidebar) → **Get Started** / **Edit**.
+App Store Connect -> your app -> **App Privacy** (left sidebar) -> **Get Started** / **Edit**.
 
-This app has **no network access, no analytics, no accounts, no ads** — nothing ever leaves the
+This app has **no network access, no analytics, no accounts, no ads** - nothing ever leaves the
 device. On-device-only processing (reading Photos to display them, place indexing, duplicate
 hashing) is **not** "data collection" in Apple's sense, which is about data transmitted off-device
 or used to track. So the whole section is one answer:
 
-### Question 1 — "Do you or your third-party partners collect data from this app?"
-→ **No, we do not collect data from this app.**
+### Question 1 - "Do you or your third-party partners collect data from this app?"
+-> **No, we do not collect data from this app.**
 
-That's it. Because you answer **No**, Apple asks **no further data-type questions** — no "what data,"
+That's it. Because you answer **No**, Apple asks **no further data-type questions** - no "what data,"
 no "linked to identity," no "tracking." Click through to finish and **Publish**.
 
 ### Related fields (elsewhere, not in this questionnaire)
 - **Privacy Policy URL** (on the version page): `https://rao-anant.github.io/MediaCurator-iOS/`
 - **Privacy Choices URL**: leave blank (not applicable).
-- The **Photos permission prompt** the app shows on launch is *not* data collection — it's on-device
+- The **Photos permission prompt** the app shows on launch is *not* data collection - it's on-device
   access to display the user's own library. It's covered by the app's usage-description string,
   separate from this section. No action needed here.
 
