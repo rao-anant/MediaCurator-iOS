@@ -628,6 +628,22 @@ struct GalleryView: View {
                         proxy.scrollTo(req.id, anchor: anchor)
                     }
                 }
+                // Blank-screen safety net. An open/switch whose landing scroll RACED the async
+                // accordion relayout can end up scrolled past the content end onto a blank screen —
+                // the target then sits far above, dropped by the lazy list, so the nudges above
+                // can't pull it back (intermittent; worse on iPad where fewer rows = less content
+                // below a freshly opened month). If nothing at all is visible after the settle window
+                // while the list DOES have content, recover: reset to the non-lazy `gallery-top`
+                // (always reachable) to bring content back on screen, then reveal the target with a
+                // nil anchor (minimum scroll — can't re-overshoot).
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {   // just after the last nudge
+                    if headerPositions.isEmpty && !vm.galleryItems.isEmpty {
+                        proxy.scrollTo("gallery-top", anchor: .top)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            proxy.scrollTo(req.id, anchor: nil)
+                        }
+                    }
+                }
             }
             .overlay(alignment: .bottomTrailing) {
                 if showScrollTop && !vm.selectionMode {

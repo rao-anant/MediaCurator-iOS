@@ -446,7 +446,7 @@ final class GalleryViewModel: ObservableObject {
     /// drives the accordion to "April 2024 > Camera open, scrolled to the bottom" so the sticky-header
     /// rendering at a deep scroll position can be captured on a machine that can't tap the simulator.
     func uiTestDriveIfRequested() {
-        guard UITestHooks.galleryScroll || UITestHooks.prevMonth || UITestHooks.select || UITestHooks.crossYear || UITestHooks.scrollUp || UITestHooks.midMonth || UITestHooks.switchMonth, !uiTestDriven else { return }
+        guard UITestHooks.galleryScroll || UITestHooks.prevMonth || UITestHooks.select || UITestHooks.crossYear || UITestHooks.scrollUp || UITestHooks.midMonth || UITestHooks.switchMonth || UITestHooks.openLast, !uiTestDriven else { return }
         uiTestDriven = true
 
         // prevMonth: open one month, then a second one, so the first becomes "previous" and the
@@ -528,6 +528,21 @@ final class GalleryViewModel: ObservableObject {
                 requestScroll(toID: "sub-2024-04:wa", belowSticky: true)   // scroll deep into April
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
                 toggleMonthExpansion("2025-06")   // now SWITCH to a month well below
+            }
+            return
+        }
+
+        // openLast: open the very last month in the list under "Largest within month" — its landing
+        // scroll anchors it to the top, but there's < a screenful below it, so an over-anchored
+        // instant scroll overshoots past the content end and blanks (iPad ph10/ph11).
+        if UITestHooks.openLast {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                setSortMode(.sizeWithinMonth)
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                for y in 2018...2026 { if !expandedYears.contains(y) { toggleYearExpansion(y) } }
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                toggleMonthExpansion("2018-01")   // the OLDEST month — the very bottom of the list
             }
             return
         }

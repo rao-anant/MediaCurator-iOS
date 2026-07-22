@@ -124,6 +124,13 @@ final class MediaRepository {
             add(2024, 9, 12, wa: false)
             return items
         }
+        // openLast needs a DEEP list (many years) with a SMALL month at the very bottom, so opening
+        // that bottom month and anchoring it near the top overshoots past the (tiny) content below it.
+        if UITestHooks.openLast {
+            for y in 2018...2025 { for m in 1...12 { add(y, m, 6, wa: false) } }
+            add(2026, 1, 3, wa: false)          // small bottom-year month
+            return items
+        }
         if UITestHooks.crossYear || UITestHooks.scrollUp || UITestHooks.switchMonth {
             add(2024, 2, 12, wa: false)
             add(2024, 4, 40, wa: false); add(2024, 4, 8, wa: true)

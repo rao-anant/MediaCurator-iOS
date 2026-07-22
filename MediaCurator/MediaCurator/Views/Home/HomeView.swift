@@ -121,7 +121,7 @@ struct HomeView: View {
             vm.load()
             // Screenshot-test hook (never triggered in normal use): skip the demo and jump straight
             // into the gallery so a scripted state can be captured on a device I can't tap.
-            if UITestHooks.galleryScroll || UITestHooks.prevMonth || UITestHooks.select || UITestHooks.crossYear || UITestHooks.scrollUp || UITestHooks.midMonth || UITestHooks.switchMonth {
+            if UITestHooks.galleryScroll || UITestHooks.prevMonth || UITestHooks.select || UITestHooks.crossYear || UITestHooks.scrollUp || UITestHooks.midMonth || UITestHooks.switchMonth || UITestHooks.openLast {
                 Self.demoShownThisProcess = true
                 if path.isEmpty { path.append(NavDestination.gallery(monthKey: nil, sort: nil)) }
                 return

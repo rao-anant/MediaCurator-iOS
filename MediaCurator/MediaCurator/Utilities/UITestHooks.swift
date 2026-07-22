@@ -37,12 +37,15 @@ enum UITestHooks {
     /// Open one month, scroll into it, then open a DIFFERENT month lower down — the month-switch
     /// path whose relayout+scroll the user found jarring. Captures the settled landing.
     static var switchMonth: Bool { args.contains("-uiSwitchMonth") }
+    /// Open the LAST month in the list under "Largest within month" — the target is near the bottom,
+    /// so an over-anchored scroll overshoots past the content end → blank (the iPad ph10/ph11 bug).
+    static var openLast: Bool { args.contains("-uiOpenLast") }
     /// Enter photo selection mode programmatically — isolates "does the state change pop the
     /// gallery?" from "does the long-press gesture pop it?", which a tap-less harness can't
     /// otherwise separate.
     static var select: Bool { args.contains("-uiSelect") }
     /// Any test mode: gates the synthetic data + PhotoKit bypasses (so nothing prompts).
-    static var synthetic: Bool { galleryScroll || trash || freeSpace || place || prevMonth || select || crossYear || scrollUp || midMonth || switchMonth }
+    static var synthetic: Bool { galleryScroll || trash || freeSpace || place || prevMonth || select || crossYear || scrollUp || midMonth || switchMonth || openLast }
     #else
     static let galleryScroll = false
     static let collapseAfterScroll = false
@@ -55,6 +58,7 @@ enum UITestHooks {
     static let scrollUp = false
     static let midMonth = false
     static let switchMonth = false
+    static let openLast = false
     static let synthetic = false
     #endif
 }
