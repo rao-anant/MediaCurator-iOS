@@ -1,6 +1,6 @@
 # App Store submission — step by step
 
-**Good news up front:** the binary (**build 38**) is already uploaded to App Store Connect, and
+**Good news up front:** the binary (**build 39**) is already uploaded to App Store Connect, and
 everything below is done in the **App Store Connect website** (appstoreconnect.apple.com) — from
 **any browser on any computer**. None of it needs the Mac. Losing the Mac does **not** block
 submitting.
@@ -51,7 +51,7 @@ Whichever you choose, use it consistently in the name field below.
    - **Privacy Policy URL:** `https://rao-anant.github.io/MediaCurator-iOS/`
    - **Screenshots:** drag in the files from `AppStore/screenshots/iphone/` (iPhone 6.9" slot) and
      `AppStore/screenshots/ipad/` (iPad 13" slot). Upload in the numbered order (01, 02, …).
-   - **Build:** click "＋ Build" (or the Build section) and select **build 38**.
+   - **Build:** click "＋ Build" (or the Build section) and select **build 39**.
    - **Copyright:** `2026 Anant Rao`
    - **Age Rating:** open the questionnaire, answer everything **None** → should yield **4+**.
 
@@ -76,7 +76,7 @@ Whichever you choose, use it consistently in the name field below.
 - [ ] Support + Privacy URLs (both live, verified 200)
 - [ ] iPhone 6.9" screenshots uploaded (4)
 - [ ] iPad 13" screenshots uploaded (6)
-- [ ] Build 38 selected
+- [ ] Build 39 selected
 - [ ] App Privacy = Data Not Collected, completed
 - [ ] Age rating questionnaire completed (4+)
 - [ ] Review notes added
