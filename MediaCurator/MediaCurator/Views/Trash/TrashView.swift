@@ -29,7 +29,7 @@ struct TrashView: View {
     private var content: some View {
         VStack(spacing: 0) {
             // Explainer — iOS reality: staged items aren't deleted until committed.
-            Text("These photos are hidden from MediaCurator but still on your iPhone. They're removed only when you delete the batch below.")
+            Text("These photos are hidden from GalleryCurator but still on your iPhone. They're removed only when you delete the batch below.")
                 .font(.footnote).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()

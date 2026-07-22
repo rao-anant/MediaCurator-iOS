@@ -81,7 +81,7 @@ struct HomeView: View {
                 }
                 .padding()
             }
-            .navigationTitle("MediaCurator")
+            .navigationTitle("GalleryCurator")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {

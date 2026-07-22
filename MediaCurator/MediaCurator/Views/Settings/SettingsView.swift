@@ -110,7 +110,7 @@ struct SettingsView: View {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         let lines = [
-            "MediaCurator diagnostics",
+            "GalleryCurator diagnostics",
             "App: \(v) (\(b))",
             "iOS: \(dev.systemVersion)  ·  Model: \(dev.model)",
             "Hidden months: \(prefs.getDoneMonths().count)",

@@ -745,7 +745,7 @@ struct GalleryView: View {
             Image(systemName: "photo.slash").font(.system(size: 56)).foregroundStyle(.secondary)
             Text("Photos Access Required")
                 .font(.title2).bold()
-            Text("MediaCurator needs access to your photo library to show and curate your media.")
+            Text("GalleryCurator needs access to your photo library to show and curate your media.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
             Button("Open Settings") {
