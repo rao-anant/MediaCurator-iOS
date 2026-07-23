@@ -9,14 +9,14 @@ Character limits noted; drafts are within them.
 GalleryCurator
 
 ## Subtitle (30 max)
-`Tidy your photo library`
+Tidy your photo library
 <!-- 23 chars. Alt: "Clean up photos, month by month" is 31 - too long. -->
 
 ## Promotional text (170 max - editable anytime without review)
 Curate your camera roll one month at a time: mark months done, clear duplicates, and browse by place. Everything stays on your device - no account, no cloud, no ads.
 
 ## Keywords (100 max, comma-separated, no spaces after commas)
-`photos,cleanup,duplicate,declutter,gallery,organize,storage,camera roll,curate,tidy,delete,by city`
+photos,cleanup,duplicate,declutter,gallery,organize,storage,camera roll,curate,tidy,delete,by city
 <!-- 99 chars. Don't repeat the app name or category words ("app", "video") - Apple indexes those already. -->
 
 ## Description (4000 max)

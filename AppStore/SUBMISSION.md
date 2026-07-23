@@ -6,7 +6,7 @@ everything below is done in the **App Store Connect website** (appstoreconnect.a
 submitting.
 
 All the assets are in this repo, so you can download them from GitHub on any machine:
-- Screenshots: `AppStore/screenshots/iphone/` (4 x 1290x2796) and `AppStore/screenshots/ipad/`
+- Screenshots: `AppStore/screenshots/iphone/` (4 x 1284x2778) and `AppStore/screenshots/ipad/`
   (6 x 2752x2064)
 - All listing text: `AppStore/LISTING.md`
 
@@ -49,7 +49,7 @@ Whichever you choose, use it consistently in the name field below.
      `AppStore/LISTING.md`.
    - **Support URL:** `https://rao-anant.github.io/MediaCurator-iOS/support.html`
    - **Privacy Policy URL:** `https://rao-anant.github.io/MediaCurator-iOS/`
-   - **Screenshots:** drag in the files from `AppStore/screenshots/iphone/` (iPhone 6.9" slot) and
+   - **Screenshots:** drag in the files from `AppStore/screenshots/iphone/` (iPhone 6.5" slot) and
      `AppStore/screenshots/ipad/` (iPad 13" slot). Upload in the numbered order (01, 02, ...).
    - **Build:** click "+ Build" (or the Build section) and select **build 39**.
    - **Copyright:** `2026 Anant Rao`
@@ -74,7 +74,7 @@ Whichever you choose, use it consistently in the name field below.
 - [ ] Name decided and entered
 - [ ] Subtitle, description, keywords, promo text filled
 - [ ] Support + Privacy URLs (both live, verified 200)
-- [ ] iPhone 6.9" screenshots uploaded (4)
+- [ ] iPhone 6.5" screenshots uploaded (4)
 - [ ] iPad 13" screenshots uploaded (6)
 - [ ] Build 39 selected
 - [ ] App Privacy = Data Not Collected, completed
