@@ -81,3 +81,33 @@ Whichever you choose, use it consistently in the name field below.
 - [ ] Age rating questionnaire completed (4+)
 - [ ] Review notes added
 - [ ] Export compliance answered
+
+---
+
+## Submitted (2026-07-22) - what happens next
+
+Submitted with **build 39** as **GalleryCurator**. Now in Apple's review queue. Everything below is
+browser-only (appstoreconnect.apple.com) - no Mac needed.
+
+Review states you'll see: Waiting for Review -> In Review -> (hopefully) Pending/Ready for
+Distribution. Typical wait ~24-48h. You get an email at each state change.
+
+### If it's approved
+- If you chose **manual release**, click **Release** when ready. If **automatic**, it goes live on
+  its own.
+
+### If it's rejected or Apple asks a question (common, not a failure)
+Most first-app rejections are small metadata clarifications, not code problems. Do NOT need the Mac:
+1. Read the message in **Resolution Center** (in App Store Connect).
+2. Reply there, or fix the flagged metadata field, then re-submit - all in the browser.
+3. Bring the exact rejection text to Claude for help drafting a response.
+- Likely themes for this app, and the honest answers: it's fully offline (no network/accounts/ads),
+  it only displays the user's own photos, Photos permission is to display the library, deletions go
+  to the system Recently Deleted. All already in the reviewer notes.
+- A **new binary** is only needed if they require a code change - that's the one thing that needs a
+  Mac (recreate the build env from `MIGRATION.md`).
+
+### Assets are safe regardless
+- Code + all `AppStore/` docs + screenshots are on GitHub.
+- Non-GitHub secrets (signing .p12, ASC API key, SSH key, memory) are in the offline
+  `mac-migration-backup` folder; `MIGRATION.md` rebuilds a Mac if ever needed.

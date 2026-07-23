@@ -1,7 +1,17 @@
 # MediaCurator iOS — Porting Progress
 
 Living handoff doc for the Android → iOS port. Read this first when resuming.
-Last updated: 2026-07-15.
+Last updated: 2026-07-22.
+
+> **🚀 STATUS: SUBMITTED TO THE APP STORE — 2026-07-22, build 39, as "GalleryCurator".**
+> Awaiting Apple review. Approval / review-replies / release are all browser-only
+> (appstoreconnect.apple.com) — the MacinCloud Mac is no longer required. Submission assets are in
+> `AppStore/` (LISTING.md, SUBMISSION.md, APP_PRIVACY.md, screenshots/). New-Mac recovery in
+> `MIGRATION.md`; offline secrets in `~/Desktop/mac-migration-backup/`.
+>
+> Builds 30→39 were on-device gallery polish: positional sticky bar, p2 blank-after-collapse fix,
+> snap-not-slide month switching, blank-on-open recovery net, long-press-selection fix, app renamed
+> GalleryCurator (MediaCurator taken). Screenshots: iPhone 4×1284×2778 (6.5" slot), iPad 6×2752×2064.
 
 ---
 
